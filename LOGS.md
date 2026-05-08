@@ -14,3 +14,10 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Bug found during verification: the local test runner is Python 3.10, so `enum.StrEnum` and a Python 3.11-only package declaration broke imports. Fixed by supporting Python 3.10 with `class AgentStatus(str, Enum)` and updating `requires-python`.
 - Test environment issue found during verification: `pytest-asyncio` is not installed in the base environment. Converted async unit tests to call `asyncio.run()` directly so the suite runs without optional extras.
 - Test environment issue found during verification: the `pytest` entrypoint did not include the repository root on `sys.path` in this environment even though direct `python3` imports worked. Added `pythonpath = ["."]` to pytest config to make package discovery explicit.
+
+### Integration test (20 agents, mock Anthropic) — 2026-05-09
+
+- **Result:** 20/20 OK in 0.21s (mock server, no network latency). Streaming works, Pydantic output validated, concurrency bounded at max_concurrent=10 (two visible waves).
+- **Real Anthropic attempt failed:** API key has insufficient credits (400 "credit balance too low"). Request payload format is correct (verified manually); billing issue only.
+- **Bug found:** `backend_from_url("anthropic://")` always constructs `AnthropicBackend()` with default `base_url`. There is no way to pass a custom base URL through the URL string. Fixed by allowing direct backend injection in the test via `WaveScheduler(plan, backend)`.
+- **Observation:** Retry logic fires correctly (exponential backoff) when live API returns 400/401 — all 3 attempts exhausted before reporting failure.

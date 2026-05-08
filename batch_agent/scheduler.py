@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import heapq
 import inspect
 import json
 import logging
@@ -30,6 +31,8 @@ class WaveScheduler:
         self._tools = self._resolve_tools(plan.spec.tools)
         # Anthropic-format tool schemas for the backend
         self._tool_schemas = self._build_tool_schemas(self._tools)
+        # Staggered dispatch: controls how many tasks are launched at once
+        self._dispatch_gate = asyncio.Semaphore(plan.spec.max_concurrent * 2)
 
     async def run(self) -> list[AgentResult]:
         results: list[AgentResult | None] = [None] * len(self.plan.jobs)
@@ -40,30 +43,62 @@ class WaveScheduler:
     async def stream(self) -> AsyncIterator[AgentResult]:
         await self.backend.warm_prefix(self.plan.shared, self.plan.spec.model)
         queue: asyncio.Queue[AgentResult | None] = asyncio.Queue()
-        tasks = [asyncio.create_task(self._execute_to_queue(job, queue)) for job in self.plan.jobs]
-        waiter = asyncio.create_task(self._finish_when_done(tasks, queue))
+
+        # Priority queue: (estimated_turns_remaining, tiebreaker, job)
+        # Lower turns_remaining = higher priority (drains nearly-done agents first)
+        pq: list[tuple[int, int, AgentJob]] = []
+        for i, job in enumerate(self.plan.jobs):
+            heapq.heappush(pq, (job.max_turns, i, job))
+
+        # Staggered dispatch: launch tasks in batches, not all at once
+        tasks: list[asyncio.Task[None]] = []
+        dispatch_done = asyncio.Event()
+
+        async def dispatch_loop():
+            counter = 0
+            while pq:
+                priority, _, job = heapq.heappop(pq)
+                # Gate limits how far ahead we get from actual completions
+                await self._dispatch_gate.acquire()
+                task = asyncio.create_task(self._execute_to_queue_staggered(job, queue))
+                tasks.append(task)
+                counter += 1
+                # After initial burst, yield to let running agents progress
+                if counter > self.plan.spec.max_concurrent:
+                    await asyncio.sleep(0)
+            dispatch_done.set()
+
+        dispatcher = asyncio.create_task(dispatch_loop())
+
+        completed_count = 0
+        total_jobs = len(self.plan.jobs)
 
         try:
-            while True:
+            while completed_count < total_jobs:
                 item = await queue.get()
                 if item is None:
                     break
+                completed_count += 1
                 yield item
         finally:
-            await waiter
+            dispatch_done.set()
+            await dispatcher
+            # Wait for any still-running tasks
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def _finish_when_done(self, tasks: list[asyncio.Task[None]], queue: asyncio.Queue[AgentResult | None]) -> None:
-        await asyncio.gather(*tasks)
-        await queue.put(None)
-
-    async def _execute_to_queue(self, job: AgentJob, queue: asyncio.Queue[AgentResult | None]) -> None:
-        result = await self._execute(job)
-        callback = self.plan.spec.on_result
-        if callback:
-            maybe_awaitable = callback(result)
-            if inspect.isawaitable(maybe_awaitable):
-                await maybe_awaitable
-        await queue.put(result)
+    async def _execute_to_queue_staggered(self, job: AgentJob, queue: asyncio.Queue[AgentResult | None]) -> None:
+        """Execute a job and release the dispatch gate when done."""
+        try:
+            result = await self._execute(job)
+            callback = self.plan.spec.on_result
+            if callback:
+                maybe_awaitable = callback(result)
+                if inspect.isawaitable(maybe_awaitable):
+                    await maybe_awaitable
+            await queue.put(result)
+        finally:
+            self._dispatch_gate.release()
 
     async def _execute(self, job: AgentJob) -> AgentResult:
         state = self.states.create(job.job_id)
@@ -97,13 +132,15 @@ class WaveScheduler:
 
         raise AssertionError("unreachable")
 
-    async def _run_agent_loop(self, job: AgentJob, state: AgentState) -> Any:
+    async def _run_agent_loop(self, job: AgentJob, state: "AgentState") -> Any:
         """Multi-turn agent loop with semaphore release during tool waits (W5)."""
         max_turns = self.plan.spec.max_turns
 
         # Initialize messages with the user prompt
         state.messages = [Message(role="user", content=job.prompt)]
         state.set_status(AgentStatus.RUNNING)
+
+        response: BackendResponse | None = None
 
         for turn in range(max_turns):
             state.turn = turn + 1
@@ -130,9 +167,22 @@ class WaveScheduler:
                 logger.info("[%s] turn=%d semaphore released", job.job_id, state.turn)
 
             # Append the assistant's response to conversation history
-            # Store raw content blocks so multi-turn tool_use/tool_result works
             if response.raw and "content" in response.raw:
                 state.messages.append(Message(role="assistant_raw", content=json.dumps(response.raw["content"])))
+            elif response.raw and "choices" in response.raw:
+                # OpenAI format: store the message as assistant_raw with content blocks
+                choice_msg = response.raw["choices"][0].get("message", {})
+                blocks = []
+                if choice_msg.get("content"):
+                    blocks.append({"type": "text", "text": choice_msg["content"]})
+                for tc in choice_msg.get("tool_calls", []):
+                    blocks.append({
+                        "type": "tool_use",
+                        "id": tc.get("id", ""),
+                        "name": tc.get("function", {}).get("name", ""),
+                        "input": json.loads(tc.get("function", {}).get("arguments", "{}")),
+                    })
+                state.messages.append(Message(role="assistant_raw", content=json.dumps(blocks)))
             else:
                 state.messages.append(Message(role="assistant", content=response.content))
 
@@ -162,6 +212,7 @@ class WaveScheduler:
                 return output
 
         # Exhausted max_turns — try to parse whatever we have
+        assert response is not None
         output = parse_and_validate_output(response.content, self.plan.spec.output_schema)
         state.output = output
         state.set_status(AgentStatus.COMPLETE)

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from batch_agent.backends import BackendAdapter, BackendResponse
 from batch_agent.compiler import TaskCompiler
 from batch_agent.scheduler import WaveScheduler
-from batch_agent.spec import AgentJob, BatchSpec, SharedContext
+from batch_agent.spec import AgentJob, BatchSpec, Message, SharedContext
 
 
 class Payload(BaseModel):
@@ -19,7 +19,7 @@ class FakeBackend(BackendAdapter):
         self.active = 0
         self.max_active = 0
 
-    async def generate(self, *, shared: SharedContext, job: AgentJob, model: str, timeout: float | None = None) -> BackendResponse:
+    async def generate(self, *, shared: SharedContext, job: AgentJob, messages: list[Message] | None = None, model: str, tools=None, timeout: float | None = None) -> BackendResponse:
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         await asyncio.sleep(0.01)

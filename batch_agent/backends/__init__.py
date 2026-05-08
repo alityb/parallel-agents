@@ -1,22 +1,54 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from batch_agent.spec import AgentJob, SharedContext
+from batch_agent.spec import AgentJob, Message, SharedContext, ToolCall
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ParsedToolCall:
+    """A tool call parsed from a model response, possibly malformed."""
+
+    id: str
+    name: str
+    args: dict[str, Any]
+    error: bool = False
+    error_message: str = ""
+
+    def to_tool_call(self) -> ToolCall:
+        return ToolCall(name=self.name, args=self.args)
 
 
 @dataclass(frozen=True)
 class BackendResponse:
     content: str
     raw: Any | None = None
-    tool_calls: list[Any] = field(default_factory=list)
+    tool_calls: list[ParsedToolCall] = field(default_factory=list)
+    stop_reason: str = ""
+
+    @property
+    def is_final(self) -> bool:
+        """True if the model stopped naturally (not requesting tool use)."""
+        return self.stop_reason != "tool_use" and not self.tool_calls
 
 
 class BackendAdapter(ABC):
     @abstractmethod
-    async def generate(self, *, shared: SharedContext, job: AgentJob, model: str, timeout: float | None = None) -> BackendResponse:
+    async def generate(
+        self,
+        *,
+        shared: SharedContext,
+        job: AgentJob,
+        messages: list[Message] | None = None,
+        model: str,
+        tools: list[dict[str, Any]] | None = None,
+        timeout: float | None = None,
+    ) -> BackendResponse:
         raise NotImplementedError
 
     async def warm_prefix(self, shared: SharedContext, model: str) -> str | None:

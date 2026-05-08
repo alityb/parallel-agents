@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 
 from .openai import OpenAIBackend
-from batch_agent.spec import SharedContext
+from batch_agent.spec import Message, SharedContext
 
 
 class VLLMBackend(OpenAIBackend):

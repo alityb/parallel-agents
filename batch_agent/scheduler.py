@@ -10,6 +10,7 @@ from typing import Any
 
 from .backends import BackendAdapter, BackendResponse, ParsedToolCall
 from .repair import parse_and_validate_output
+from .schema import build_tool_schemas
 from .spec import AgentError, AgentJob, AgentResult, ExecutionPlan, Message
 from .state import AgentStatus, InMemoryStateStore
 from .tools import Tool, ToolDefinition
@@ -226,46 +227,7 @@ class WaveScheduler:
 
     def _build_tool_schemas(self, tools: dict[str, ToolDefinition]) -> list[dict[str, Any]]:
         """Build Anthropic-format tool schemas from resolved definitions."""
-        schemas: list[dict[str, Any]] = []
-        for name, defn in tools.items():
-            # Introspect function signature to build input_schema
-            import inspect as _inspect
-            sig = _inspect.signature(defn.func)
-            properties: dict[str, Any] = {}
-            required: list[str] = []
-            for param_name, param in sig.parameters.items():
-                if param_name in ("self", "cls"):
-                    continue
-                prop: dict[str, Any] = {"type": "string"}  # default to string
-                if param.annotation is not _inspect.Parameter.empty:
-                    prop = _annotation_to_schema(param.annotation)
-                if param.default is _inspect.Parameter.empty:
-                    required.append(param_name)
-                properties[param_name] = prop
-
-            schemas.append({
-                "name": name,
-                "description": (defn.func.__doc__ or f"Tool: {name}").strip(),
-                "input_schema": {
-                    "type": "object",
-                    "properties": properties,
-                    "required": required,
-                },
-            })
-        return schemas
-
-
-def _annotation_to_schema(annotation: Any) -> dict[str, Any]:
-    """Convert a Python type annotation to a basic JSON Schema type."""
-    if annotation is str:
-        return {"type": "string"}
-    if annotation is int:
-        return {"type": "integer"}
-    if annotation is float:
-        return {"type": "number"}
-    if annotation is bool:
-        return {"type": "boolean"}
-    return {"type": "string"}
+        return build_tool_schemas(tools)
 
 
 # Re-export for type checking

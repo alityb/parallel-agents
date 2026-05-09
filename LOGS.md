@@ -99,6 +99,13 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Streaming dispatch improvement recorded in the benchmark summary: `0.101s` overlap from the W16 mock timing probe.
 - Regression note: no regression vs the intended W15/W16 mock expectations. F is intentionally equal to E because KVFlow prefetch is still blocked pending vLLM scheduler integration.
 
+### AGENTS.md v2 update — 2026-05-09
+
+- Updated architecture/spec to include three-tier `run_with_map_reduce()`, Dynamo as a first-class backend, `nvext.agent_hints`, W15 as fixed, and W16 as fixed.
+- Added Phase 5 for Dynamo integration and production harness compatibility.
+- Updated the state table with session-header stripping, streaming tool dispatch, Dynamo, three-tier map-reduce, and AutoResearch status.
+- Updated success definition with AutoResearch, Dynamo compatibility, and `Tool.claude_code` prefix-cache hit-rate goals.
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

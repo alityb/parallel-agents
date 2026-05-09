@@ -349,6 +349,18 @@ Internal `asyncio.Queue`. Wave Scheduler pushes to it as agents complete. `on_re
 
 ---
 
+### 3.8 Three-tier Map-Reduce Topology *(new in v0.2)*
+
+`BatchAgent.run_with_map_reduce()` runs a plan -> map -> reduce DAG:
+
+1. **Plan:** one planner agent produces a structured `items: list[str]`.
+2. **Map:** one worker agent per item runs through the normal Wave Scheduler with tool deduplication, streaming dispatch, KVFlow hints, retries, and structured output validation.
+3. **Reduce:** one reducer agent receives all map results, including structured error entries for failed map agents, and produces the final synthesized output.
+
+Stage-specific models are supported through `planner_model`, `worker_model`, and `reducer_model`. `checkpoint_dir` is split into `plan/`, `map/`, and `reduce/` so a completed planner stage can resume without re-running.
+
+---
+
 ### 3.9 Dynamo Adapter *(new in v0.2)*
 
 `backend="dynamo://localhost:8000"` extends the vLLM/OpenAI-compatible adapter with NVIDIA Dynamo request extensions.
@@ -452,6 +464,28 @@ Tasks:
 **Goal:** Multiple orchestration servers, multiple inference nodes, single logical batch run.
 
 **Architecture change:** Agent state moves from in-process dict to Redis Streams. The Wave Scheduler becomes a distributed coordinator — multiple instances, each managing a shard of the agent pool, coordinating via a shared priority queue in Redis.
+
+---
+
+### Phase 5 — Dynamo Integration and Production Harness Compatibility (Week 19–21)
+
+**Goal:** Make BatchAgent work with unmodified NVIDIA Dynamo and production agent harnesses.
+
+Tasks:
+- [x] Strip session-variant Anthropic/AWS preamble headers before prefix hashing and request dispatch (`strip_preamble=True` default)
+- [x] Add streaming tool dispatch through `BackendAdapter.generate_streaming()`
+- [x] Parse Dynamo-native `tool_call_dispatch` SSE events
+- [x] Attach `nvext.agent_hints` when `BatchSpec.nvext_agent_hints=True`
+- [x] Add `backend="dynamo://host:port"`
+- [x] Add `run_with_map_reduce()` for plan -> map -> reduce AutoResearch topology
+- [x] Add AutoResearch example skeleton
+- [ ] Run AutoResearch live with Anthropic + search credentials and commit output artifact
+- [ ] Verify Dynamo against a live server
+
+Success criteria:
+- SDK works with unmodified NVIDIA Dynamo via `nvext.agent_hints`
+- `Tool.claude_code` and other session-header sources keep >=90% prefix cache hit rate with stripping enabled
+- Streaming tool dispatch overlaps tool latency with generation in live backend traces
 
 Tasks:
 - [ ] Redis Streams state store: `AgentState` checkpointed every turn
@@ -647,19 +681,19 @@ Semaphore wraps only inference calls. Agents in `TOOL_WAIT` release their slot. 
 
 ---
 
-### W15: Session-variant headers poison the prefix cache *(new)*
+### W15: Session-variant headers poison the prefix cache ✅ FIXED
 
 **Problem:** If agents run via `Tool.claude_code`, Claude Code's session-specific billing header appears at token zero of each agent's prompt. This makes every agent's prefix unique, defeating prefix caching entirely.
 
-**Mitigation:** Add a `strip_preamble_headers` option to the vLLM adapter that removes known session-variant headers before tokenization. Default it on when `Tool.claude_code` is in the tool list.
+**Mitigation:** `strip_preamble_headers()` removes `x-anthropic-*` and `x-amz-*` preamble lines before prefix hashing, cache warming, and backend dispatch. `BatchSpec.strip_preamble=True` by default, with an explicit escape hatch.
 
 ---
 
-### W16: Streaming tool dispatch is not implemented *(new)*
+### W16: Streaming tool dispatch is not implemented ✅ FIXED
 
 **Problem:** Tools are executed only after the full model response is received. NVIDIA Dynamo's `--enable-streaming-tool-dispatch` shows that tool calls can be dispatched as soon as they are parsed from the stream, allowing tool execution and continued token generation to proceed in parallel.
 
-**Mitigation:** Implement streaming tool-call parsing and dispatch in the vLLM adapter. This would reduce `TOOL_WAIT` time without requiring orchestration changes.
+**Mitigation:** `BatchSpec.streaming_tool_dispatch=True` by default. Anthropic, OpenAI/vLLM-compatible, and Dynamo streaming paths can emit `StreamingToolCall` events that the scheduler dispatches into `ToolPool` before the full model response returns.
 
 ---
 
@@ -818,12 +852,17 @@ async def get_paper_metadata(paper_id: int) -> PaperMeta:
 | Multi-turn agent loop | ✅ | ✅ | ✅ |
 | W5 semaphore fix | ✅ | ✅ | ✅ |
 | Tool coalescing | ✅ | ✅ | ✅ |
+| Streaming tool dispatch | ✅ mock | ✅ live | ✅ |
 | Priority queue | ✅ | ✅ | ✅ |
 | Prefix caching (API) | ✅ | ✅ | ✅ |
+| Session-header stripping (W15) | ✅ | ✅ | ✅ |
 | Prefix caching (vLLM, live) | Untested on GPU | ✅ tested + pinned | ✅ |
 | KVFlow prefetch | hints only; vLLM scheduler integration pending | ✅ scheduler-integrated | ✅ |
 | TokenDance diff KV | ❌ | ✅ (flag-gated) | ✅ |
-| SGLang backend | Stub | ✅ | ✅ |
+| SGLang backend | Parser fix mocked; live unresolved | ✅ | ✅ |
+| Dynamo backend / nvext hints | ✅ mock | ✅ live | ✅ |
+| Three-tier map-reduce | ✅ mock | ✅ live demo | ✅ |
+| AutoResearch example | skeleton; live blocked by credentials | ✅ artifact | ✅ |
 | Model-based compaction | Heuristic only | ✅ | ✅ |
 | Predictive tool pre-warming | ❌ | ✅ (opt-in) | ✅ |
 | Adaptive concurrency | ❌ | ✅ | ✅ |
@@ -854,7 +893,10 @@ The SDK is done when:
 5. KV storage per agent with TokenDance ≥10x lower than full-copy storage at N=100.
 6. 500 concurrent agents: no OOM, no unhandled exceptions, ≤2% failure rate.
 7. 1,000 agents across 4 nodes with linear throughput scaling (Phase 4).
-8. Benchmark results are published, reproducible, and honest — including conditions where the SDK does NOT help: single-agent tasks, highly heterogeneous prompts with no shared prefix, API-only users who can't self-host.
+8. AutoResearch demo produces a coherent 20-section survey paper in under 6 minutes for under $2.
+9. SDK works with unmodified NVIDIA Dynamo via `nvext.agent_hints`.
+10. `Tool.claude_code` achieves ≥90% prefix cache hit rate after W15 stripping.
+11. Benchmark results are published, reproducible, and honest — including conditions where the SDK does NOT help: single-agent tasks, highly heterogeneous prompts with no shared prefix, API-only users who can't self-host.
 
 ---
 

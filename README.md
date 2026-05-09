@@ -1,30 +1,39 @@
 # Batch Agent SDK
 
+The orchestration layer for production multi-agent systems. Compatible with vLLM, SGLang, and NVIDIA Dynamo.
+
 Run N LLM agents in parallel. Input list in, structured result list out. Results stream as each agent finishes — you don't wait for the slowest one.
 
 ```python
 from batch_agent import BatchAgent, Tool
 from pydantic import BaseModel
 
-class PaperSummary(BaseModel):
-    benchmark_name: str | None
-    primary_metric: str
-    models_tested: list[str]
-    summary: str
+class ResearchPlan(BaseModel):
+    items: list[str]
 
-results = await BatchAgent.run(
-    system_prompt="You are a precise scientific summarizer.",
-    task="Summarize this paper:\n\n{paper_text}",
-    inputs=[{"paper_text": text} for text in papers],
-    tools=[Tool.read_file, Tool.web_search],
-    output_schema=PaperSummary,
-    model="meta-llama/Llama-3.1-70B-Instruct",
-    backend="vllm://localhost:8000",
-    max_inflight=64,
-    max_turns=4,
-    max_retries=2,
-    on_result=lambda r: print(r.output),
+class ResearchAnswer(BaseModel):
+    question: str
+    answer: str
+
+class SurveyPaper(BaseModel):
+    title: str
+    abstract: str
+    sections: list[dict]
+
+# Generate a 20-question survey paper on any topic
+results, paper = await BatchAgent.run_with_map_reduce(
+    plan_prompt="Generate 20 research questions about: {topic}",
+    plan_inputs={"topic": "transformer attention optimization"},
+    plan_output_schema=ResearchPlan,
+    task="Research this question: {item}",
+    output_schema=ResearchAnswer,
+    reduce="Synthesize into a survey paper",
+    reduce_schema=SurveyPaper,
+    tools=[Tool.web_search, Tool.claude_code],
+    model="claude-sonnet-4-6",
+    backend="anthropic://",
 )
+# 20 parallel research agents -> 1 synthesized paper
 ```
 
 ---
@@ -89,6 +98,68 @@ Live dashboard:
 ```bash
 batch-agent run --spec my_task.json --dashboard
 ```
+
+---
+
+## AutoResearch
+
+`run_with_map_reduce()` is a three-tier topology:
+
+```
+planner agent -> N research agents -> reducer agent
+```
+
+The planner produces `items: list[str]`, each map agent receives one `{item}`, and the reducer receives every map result plus structured error entries for failures. The map stage uses the normal scheduler: tool deduplication, streaming tool dispatch, retries, checkpoints, KVFlow hints, and result streaming.
+
+Run the example:
+
+```bash
+python examples/auto_research.py \
+  --topic "KV cache optimization for multi-agent LLM inference" \
+  --n-questions 20 \
+  --backend anthropic:// \
+  --output examples/output/kv_cache_survey.md
+```
+
+Live AutoResearch cost/timing is not reported yet because the validation run was blocked by missing Anthropic and search API credentials.
+
+---
+
+## NVIDIA Dynamo Compatibility
+
+Use Dynamo through the OpenAI-compatible endpoint:
+
+```python
+results = await BatchAgent.run(
+    task="Analyze {item}",
+    inputs=[{"item": x} for x in items],
+    output_schema=Answer,
+    model="meta-llama/Llama-3.1-70B-Instruct",
+    backend="dynamo://localhost:8000",
+    nvext_agent_hints=True,
+)
+```
+
+When enabled, BatchAgent attaches `nvext.agent_hints` with latency sensitivity, priority, speculative prefill, and output-length estimates derived from scheduler state. Dynamo-native `tool_call_dispatch` SSE events are parsed by the streaming dispatch path so tools can start before the full model response completes.
+
+---
+
+## Tool.claude_code
+
+`Tool.claude_code` lets each batch agent launch a Claude Code subagent:
+
+```python
+results = await BatchAgent.run(
+    task="Review this module: {path}",
+    inputs=[{"path": p} for p in paths],
+    tools=[Tool.claude_code, Tool.read_file],
+    output_schema=Review,
+    model="claude-sonnet-4-6",
+    backend="anthropic://",
+)
+```
+
+It requires the `claude` CLI plus either `ANTHROPIC_API_KEY` or a Claude subscription. BatchAgent strips session-variant preamble headers before prefix hashing by default, so Claude Code billing headers do not poison shared-prefix caching.
 
 ---
 
@@ -195,13 +266,14 @@ The semaphore wraps **only** inference calls, not tool waits. This is the W5 inv
 
 Capabilities come from `BackendAdapter.backend_capabilities()`:
 
-| Backend | URL | prefix_pinning | kvflow | diff_kv | max_safe_concurrent |
-|---|---|---|---|---|---|
-| Anthropic API | `anthropic://` | — | — | — | 5 |
-| OpenAI API | `openai://host` | — | — | — | 5 |
-| **vLLM** | `vllm://host:8000` | ✓ | ⚠️ hints emit; prefetch blocked pending scheduler integration | ✓ | 64 |
-| **SGLang** | `sglang://host:30000` | — | ✓ | — | 64 |
-| AWS Bedrock | `bedrock://region` | — | — | — | 1–3 (AIMD) |
+| Backend | URL | prefix_pinning | kvflow | diff_kv | nvext hints | max_safe_concurrent |
+|---|---|---|---|---|---|---|
+| Anthropic API | `anthropic://` | — | — | — | — | 5 |
+| OpenAI API | `openai://host` | — | — | — | — | 5 |
+| **vLLM** | `vllm://host:8000` | yes | hints only; scheduler integration pending | yes | — | 64 |
+| **SGLang** | `sglang://host:30000` | — | yes | — | — | 64 |
+| **NVIDIA Dynamo** | `dynamo://host:8000` | yes | via scheduler hints | yes | yes | 64 |
+| AWS Bedrock | `bedrock://region` | — | — | — | — | 1-3 (AIMD) |
 
 **Bedrock notes** — from `tests/benchmarks/results/bedrock_cache_isolation/results.json`:
 - Prompt caching confirmed active when system prompt ≥ ~1,024 tokens
@@ -233,6 +305,7 @@ Capabilities come from `BackendAdapter.backend_capabilities()`:
 | 2 — Scale | ✅ | 500-agent benchmark, retry, compaction, checkpointing, reduce |
 | 3A — KVFlow | ⚠️ blocked | Advisor emits hints, but vLLM prefetch needs scheduler integration; A/B/C measurement did not confirm prefetch benefit |
 | 3B — TokenDance | ✅ mock | 18.76× compression in synthetic test; live vLLM patch pending |
-| 3C — SGLang | ✅ mock | Full adapter; live GPU test pending |
+| 3C — SGLang | ⚠️ mock | Parser fix covered locally; live GPU rerun still unresolved |
 | 4 — Distributed | ⏳ prototype | Mock Redis tested; real cluster + 1,000-agent benchmark pending |
+| 5 — Dynamo + AutoResearch | ✅ mock | Dynamo hints, streaming dispatch, map-reduce, and example; live demo blocked by credentials |
 | **Publish** | **blocked** | Blocked on: 70B benchmark and final publish decision |

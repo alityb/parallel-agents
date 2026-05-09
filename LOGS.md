@@ -106,6 +106,13 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Updated the state table with session-header stripping, streaming tool dispatch, Dynamo, three-tier map-reduce, and AutoResearch status.
 - Updated success definition with AutoResearch, Dynamo compatibility, and `Tool.claude_code` prefix-cache hit-rate goals.
 
+### README v2 positioning — 2026-05-09
+
+- Updated README headline to position BatchAgent as the orchestration layer for production multi-agent systems compatible with vLLM, SGLang, and NVIDIA Dynamo.
+- Replaced the top example with a `run_with_map_reduce()` AutoResearch-style demo using `Tool.web_search` and `Tool.claude_code`.
+- Added sections for AutoResearch, NVIDIA Dynamo compatibility, and `Tool.claude_code`.
+- Kept the honest benchmark, cost, backend, limitation, and roadmap sections, including the KVFlow prefetch blocker and the blocked live AutoResearch run.
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

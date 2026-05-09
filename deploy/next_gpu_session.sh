@@ -17,7 +17,7 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 + sudo apt-get install -y -q git tmux redis-server python3-pip python3-venv build-essential ninja-build
 + [ -d ~/vllm-env ] || python3 -m venv ~/vllm-env
 + source ~/vllm-env/bin/activate
-+ pip install -e $REPO --quiet
++ pip install -e "$REPO[test,redis]" --quiet
 + [ -d ~/vllm-src ] || git clone --depth 1 --branch v0.6.6 https://github.com/vllm-project/vllm ~/vllm-src
 + cd ~/vllm-src
 + python3 $SCRIPT_DIR/apply_vllm_patch.py
@@ -61,8 +61,8 @@ echo "=========================================================="
 echo "HOUR 1: Installing vLLM from source + applying prefetch patch"
 echo "=========================================================="
 
-# Install our SDK first
-pip install -e $REPO --quiet
+# Install our SDK plus test/Redis dependencies used later in this session.
+pip install -e "$REPO[test,redis]" --quiet
 
 # Clone vLLM 0.6.6 if not present
 if [ ! -d ~/vllm-src ]; then

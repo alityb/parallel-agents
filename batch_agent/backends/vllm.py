@@ -99,15 +99,37 @@ class VLLMBackend(OpenAIBackend):
         PagedAttention prefix sharing should keep vLLM GPU cache usage flat, or
         close to flat, when several agents hit the same warmed prefix.
         """
-        if self.block_sharing_probe_agents <= 0:
+        result = await self.verify_prefix_sharing(
+            shared,
+            model,
+            n_agents=self.block_sharing_probe_agents,
+        )
+        if not result or result.get("sharing_active", True):
             return
+        logger.warning(
+            "vLLM prefix block sharing may not be working: gpu_cache_usage_perc "
+            "increased from %.4f to %.4f after %d same-prefix probes",
+            result["cache_usage_before"],
+            result["cache_usage_after"],
+            int(result["n_agents"]),
+        )
+
+    async def verify_prefix_sharing(
+        self,
+        shared: SharedContext,
+        model: str,
+        n_agents: int = 10,
+    ) -> dict[str, Any]:
+        """Verify that PagedAttention block sharing is active for a warmed prefix."""
+        if n_agents <= 0:
+            return {}
         prefix = strip_preamble_headers(shared.prefix) if shared.strip_preamble else shared.prefix
         before = await self._gpu_cache_usage_perc()
         if before is None:
-            return
+            return {}
 
         async with httpx.AsyncClient(timeout=PREFIX_WARM_TIMEOUT) as client:
-            for _ in range(self.block_sharing_probe_agents):
+            for _ in range(n_agents):
                 try:
                     response = await client.post(
                         f"{self.base_url}/v1/chat/completions",
@@ -122,19 +144,19 @@ class VLLMBackend(OpenAIBackend):
                     response.raise_for_status()
                 except Exception as e:
                     logger.debug("prefix sharing probe skipped after request failure: %s", e)
-                    return
+                    return {}
 
         after = await self._gpu_cache_usage_perc()
         if after is None:
-            return
-        if after > before + self.block_sharing_usage_tolerance:
-            logger.warning(
-                "vLLM prefix block sharing may not be working: gpu_cache_usage_perc "
-                "increased from %.4f to %.4f after %d same-prefix probes",
-                before,
-                after,
-                self.block_sharing_probe_agents,
-            )
+            return {}
+        growth = after - before
+        return {
+            "sharing_active": growth <= self.block_sharing_usage_tolerance,
+            "cache_usage_before": before,
+            "cache_usage_after": after,
+            "growth_per_agent": growth / max(1, n_agents),
+            "n_agents": n_agents,
+        }
 
     async def _gpu_cache_usage_perc(self) -> float | None:
         try:

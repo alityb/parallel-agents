@@ -75,6 +75,33 @@ def test_warm_prefix_warns_when_same_prefix_increases_gpu_cache_usage(caplog) ->
         server.shutdown()
 
 
+def test_verify_prefix_sharing_returns_cache_growth_measurement() -> None:
+    _VLLMProbeHandler.gpu_cache_usage_values = [0.10, 0.10]
+    _VLLMProbeHandler.chat_calls = 0
+    _VLLMProbeHandler.chat_bodies = []
+    server = HTTPServer(("127.0.0.1", 0), _VLLMProbeHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        backend = VLLMBackend(
+            api_key="EMPTY",
+            base_url=f"http://127.0.0.1:{server.server_port}",
+            block_sharing_usage_tolerance=0.001,
+        )
+        result = asyncio.run(
+            backend.verify_prefix_sharing(SharedContext(prefix="shared prefix"), model="mock", n_agents=3)
+        )
+        assert result == {
+            "sharing_active": True,
+            "cache_usage_before": 0.10,
+            "cache_usage_after": 0.10,
+            "growth_per_agent": 0.0,
+            "n_agents": 3,
+        }
+    finally:
+        server.shutdown()
+
+
 def test_warm_prefix_strips_session_headers_for_stable_hash() -> None:
     _VLLMProbeHandler.gpu_cache_usage_values = [0.10]
     _VLLMProbeHandler.chat_calls = 0

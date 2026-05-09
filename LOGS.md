@@ -48,6 +48,14 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
   `python3 examples/auto_research.py --topic "KV cache optimization for multi-agent LLM inference" --n-questions 10 --backend anthropic:// --output examples/output/kv_cache_survey_n10.md`
   then rerun with `--n-questions 20 --output examples/output/kv_cache_survey_n20.md` for the final demo artifact.
 
+### PagedAttention co-design fixes — 2026-05-09
+
+- Added public `VLLMBackend.verify_prefix_sharing(shared, model, n_agents=10)` returning `sharing_active`, `cache_usage_before`, `cache_usage_after`, and `growth_per_agent`.
+- `warm_prefix()` now calls the verification path via `_verify_prefix_block_sharing()` and logs a warning when same-prefix probes grow `vllm:gpu_cache_usage_perc` beyond tolerance.
+- Kept the corrected safe `/internal/prefetch` behavior: `kv_key`-only hints are not translated to resident GPU block IDs. vLLM 0.6.6 needs scheduler-owned CPU→GPU mappings from `BlockSpaceManager.swap_in(seq_group)`, so API-route block translation remains blocked pending scheduler integration.
+- `deploy/vllm_server.sh` already includes `--enable-chunked-prefill`. D vs E impact has not been measured after the flag; this still requires a live vLLM rerun.
+- `DiffCacheEngine` already defaults to `block_size=16`, matching vLLM PagedAttention, and unit coverage verifies splits happen only at 16-token boundaries. Synthetic compression remains `18.757327x` vs previous logged `18.76x`, effectively unchanged.
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

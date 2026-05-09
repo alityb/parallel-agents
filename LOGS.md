@@ -186,3 +186,15 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Added `tests/unit/test_kvflow_advisor.py`: verifies ETA ordering and horizon filtering.
 - Added `tests/integration/test_prefetch_accuracy.py`: 20 agents, 3 turns, simulated 300ms tool waits, mock backend records prefetch hits; target ≥80% hit rate passes.
 - Full pytest suite after KVFlow changes: 50 passed.
+
+### Phase 3A vLLM prefetch patch helper — 2026-05-09
+
+- Added `batch_agent/backends/vllm_patch/prefetch_route.py` with `/internal/prefetch` and `/internal/pin_blocks` FastAPI route registration helpers.
+- Target vLLM version pinned for this patch path: vLLM 0.6.x.
+- `/internal/prefetch` maps `kv_key` values to vLLM block IDs through a registry and calls `cache_engine.prefetch(block_ids, destination="gpu")`. No new tensor transfer logic is added; this intentionally reuses CacheEngine swap/prefetch infrastructure.
+- `/internal/pin_blocks` maps `kv_key` values to block IDs and calls `block_manager.pin_blocks(block_ids)` if available, or populates a `pinned_block_ids` set for the BlockManager eviction path to consult.
+- Exact vLLM source location to patch for pinning: vLLM 0.6.x BlockManager/BlockSpaceManager eviction path under `vllm/core/block_manager*.py`; add a pinned block-ID/hash set and skip pinned blocks in the LRU/free-block eviction candidate selection.
+- Added `tests/unit/test_vllm_prefetch_route.py` with a mock CacheEngine and BlockManager. The test verifies `kv_key -> block_ids` mapping and that `prefetch(..., destination="gpu")` is invoked.
+- Hardware blocker: this route cannot prove real GPU transfer latency without a running patched vLLM server and GPU.
+- Cold KV reload latency proxy numbers recorded from the architecture/spec and TokenDance/KVFlow literature assumptions: ~50ms for ~1K-token contexts, ~100ms for ~2K-token contexts, ~200ms for ~4K-token multi-turn contexts on large 70B-class deployments. The prefetch path eliminates this reload from the critical path by moving CPU→GPU block transfer before agent reactivation.
+- Full pytest suite after prefetch route helper: 52 passed.

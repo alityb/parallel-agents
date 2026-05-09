@@ -2,6 +2,27 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 
 ## 2026-05-09
 
+### GPU session final status and PagedAttention follow-ups — 2026-05-09
+
+- Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.
+- Measurement-integrity rerun supersedes the earlier 72ms KVFlow claim. Benchmark conditions: N=20 agents, simulated tool wait 300ms, shared system prompt 4096 chars / 502 Qwen tokens, turn-1 prompt 705 Qwen tokens, turn-2 post-tool prompt 765 Qwen tokens.
+- Condition A, no prefetch hints (`kvflow=False`): turn-2 TTFT-after-TOOL_WAIT P50 `2.626960s`, P95 `2.970519s`, wall `13.069433s`, OK `20/20`.
+- Condition B, prefetch hints sent to corrected patch and rejected as `kv_key`-only hints: turn-2 TTFT-after-TOOL_WAIT P50 `2.846764s`, P95 `3.308638s`, wall `8.758552s`, OK `20/20`, `prefetch_missing_total=241`, `prefetch_block_pairs_total=0`.
+- Condition C, same as B with explicit `warm_prefix()` metrics check: turn-2 TTFT-after-TOOL_WAIT P50 `3.031180s`, P95 `4.106545s`, wall `9.913239s`, OK `20/20`, `prefetch_missing_total=210`, `prefetch_block_pairs_total=0`. Prefix cache hit rate stayed high (`0.988111` before, `0.988995` after), but no prefetch block pairs moved.
+- Finding: KVFlow prefetch is blocked pending vLLM scheduler integration. A/B/C do not show a prefetch-specific improvement; B and C were slower than A by `0.219804s` and `0.404219s` P50. The earlier 72ms result is attributed to run variance or warm-state effects, not confirmed prefetch.
+- Benchmark JSON: local `tests/benchmarks/results/kvflow_measurement_integrity/results.json`; GPU host artifact `/tmp/session_results/kvflow_measurement_integrity_clean.json`.
+- vLLM scheduler audit: in vLLM 0.6.6, `Scheduler._schedule_swapped()` decides when a swapped `SequenceGroup` can return to GPU by checking `block_manager.can_swap_in(seq_group, ...)`, scheduling budget, LoRA constraints, and queue state. It then calls `_swap_in(seq_group, blocks_to_swap_in)`, which calls `BlockSpaceManager.swap_in(seq_group)`.
+- `BlockSpaceManager.swap_in(seq_group)` has the information the API route lacks: the concrete `SequenceGroup`, `SequenceStatus.SWAPPED` sequences, per-sequence block tables, and allocator state. It asks the allocator to swap CPU blocks to GPU blocks and returns the required CPU physical block ID to GPU physical block ID mapping. `CacheEngine.swap_in()` consumes that mapping; it does not derive it from a prefix hash.
+- Conclusion: a standalone `/internal/prefetch` route receiving only BatchAgent `kv_key` prefix hashes cannot safely produce `swap_in()` mappings in vLLM 0.6.6. Implementing KVFlow prefetch correctly requires scheduler-integrated hints or a vLLM scheduler fork/native hook, not an out-of-band API route that mutates block tables.
+- SGLang live server came up after pinning NCCL, but the benchmark produced `0/10` and `0/50` valid SDK results. Integration tests were `2 passed, 1 skipped`; the remaining failure mode is SDK/SGLang response compatibility, not server startup.
+- Distributed real Redis pytest passed `2/2`; `real_redis_chaos.py` initially failed because redis-py requires integer `ex=` TTLs. Fixed locally by using integer `ex` or millisecond `px`.
+- Added PagedAttention follow-ups: vLLM `warm_prefix()` now warns if repeated same-prefix probes increase `vllm:gpu_cache_usage_perc`; `deploy/apply_vllm_patch.py` now refuses unsafe `kv_key`/resident-GPU-block prefetch guesses and only calls `CacheEngine.swap_in()` with explicit CPU→GPU block pairs; `deploy/vllm_server.sh` now passes `--enable-chunked-prefill`.
+- PagedAttention correctness audit: vLLM 0.6.6 `BlockSpaceManager.get_block_table(seq)` returns resident GPU physical block IDs for scheduled metadata, while `CacheEngine.swap_in()` requires CPU→GPU mappings produced by scheduler-side `BlockSpaceManager.swap_in(seq_group)`. A BatchAgent prefix hash cannot be safely translated to those mappings from the API route alone without mutating scheduler state, so `kv_key`-only hints are reported as `missing` until a safe scheduler-integrated mapping is available.
+- Chunked prefill D vs E impact: flag added, but D/E was not rerun after the flag in this turn. The last real D/E numbers remain the pre-chunked-prefill A10G results below; rerun `tests/benchmarks/fair_comparison.py` equivalent against live vLLM before claiming a change.
+- DiffCacheEngine block-size alignment: added `block_size=16` default matching vLLM PagedAttention default, kept `block_size_tokens` as a compatibility alias, and verified splits occur only on 16-token block boundaries. Synthetic TokenDance compression remained `18.757327x`, unchanged from the previously logged `18.76x`.
+- Validation: `python3 -m py_compile deploy/apply_vllm_patch.py batch_agent/backends/vllm_patch/prefetch_route.py batch_agent/backends/vllm.py batch_agent/backends/vllm_patch/diff_cache_engine.py` passed; targeted pytest `tests/unit/test_vllm_prefetch_route.py tests/integration/test_vllm_backend.py tests/unit/test_diff_encoder.py -q` passed with `8 passed`; full `python3 -m pytest -q` passed with `111 passed, 1 skipped`.
+- vLLM patch check: copied the live GPU host's `~/vllm-src` to `/tmp/vllm-patch-check`, ran the updated `deploy/apply_vllm_patch.py` against that copy, and compiled patched `cache_engine.py` plus `api_server.py`. The patched copy contained marker `BatchAgent KVFlow prefetch patch v3 safe swap mappings` and `CacheEngine.prefetch requires explicit CPU->GPU block pairs`.
+
 ### Deploy GPU session hardening — 2026-05-09
 
 - Read `AGENTS.md`, `LOGS.md`, and the pasted audit/status report before editing. No separate audit report file exists in the repo; the only audit-named artifact is `tests/unit/test_audit_gap_coverage.py`.
@@ -694,9 +715,11 @@ Previously: D-naive used single-turn (file content in prompt). Now both D and E 
 
 Tool dedup is 1.0x on real GPU (confirmed again): file reads complete in <1ms, so each agent's inflight window doesn't overlap. On slow tools (200ms+) dedup fires as shown in the mock benchmark.
 
-#### 4. KVFlow advisor live hint emission
+#### 4. KVFlow advisor live hint emission and patched prefetch
 
-60 hints emitted across 10 agents (each agent entered TOOL_WAIT once, advisor ran multiple times). All 10 agents completed OK. Hints sent to `/internal/prefetch` — vLLM 0.20 returns 404 silently because the endpoint requires the `vllm_patch/prefetch_route.py` to be installed. This is the confirmed GPU hardware blocker: the SDK sends the right hints, vLLM ignores them without the patch.
+Initial vLLM 0.20 run: 60 hints emitted across 10 agents and all 10 agents completed OK, but `/internal/prefetch` returned 404 because the endpoint was not installed.
+
+Follow-up vLLM 0.6.6.post1 patched run on A10G: `/internal/prefetch` returned 200 and the initial run appeared to reduce turn-2 TTFT-after-TOOL_WAIT P50 from `3.942549s` to `3.870760s` at N=20 with 300ms simulated tool waits, a measured **72ms** improvement. This claim is superseded by the measurement-integrity rerun at the top of this log: corrected `kv_key`-only hints moved `0` block pairs, so the 72ms result is not evidence of KVFlow prefetch.
 
 #### 5. Adaptive concurrency on real vLLM /metrics
 
@@ -706,10 +729,10 @@ Tool dedup is 1.0x on real GPU (confirmed again): file reads complete in <1ms, s
 
 | Item | Status | Blocker |
 |---|---|---|
-| vLLM `/internal/prefetch` patch | ⏳ patch written, not installed | Requires modifying vLLM source and restarting server |
-| vLLM prefix block pinning | ⏳ same | Same vLLM source patch |
-| SGLang live test | ❌ | No SGLang instance available |
-| Distributed mode (real Redis) | ❌ | No Redis cluster |
+| vLLM `/internal/prefetch` patch | ✅ live on A10G | vLLM 0.6.6.post1 patched wheel returned 200 |
+| vLLM prefix block pinning | ⏳ endpoint only | BlockManager eviction integration still pending |
+| SGLang live test | ⚠️ server up, SDK outputs invalid | 0/10 and 0/50 valid results; response compatibility still open |
+| Distributed mode (real Redis) | ⚠️ pytest pass, chaos fixed locally | Real Redis pytest 2/2; chaos TTL bug fixed after session |
 | 70B model benchmark | ❌ | Single A10G insufficient (need 2× A100 80GB) |
 | 1,000-agent benchmark | ❌ | Needs 4 orchestration nodes + 2 vLLM nodes |
   ```
@@ -717,6 +740,6 @@ Tool dedup is 1.0x on real GPU (confirmed again): file reads complete in <1ms, s
   ```
   Prerequisites before publish:
   1. Run 70B model benchmark (requires 2× A100 or 4× A10G)
-  2. Run live vLLM KVFlow prefetch accuracy measurement on GPU
+  2. Rerun D/E with `--enable-chunked-prefill` to measure chunked-prefill impact
   3. Record cost-per-task comparison at N=100: self-hosted vLLM vs Anthropic API
-  4. Bump version to 0.2.0 after KVFlow Phase 3A live results are in LOGS.md
+  4. Bump version to 0.2.0 after remaining live SGLang/distributed gaps are resolved

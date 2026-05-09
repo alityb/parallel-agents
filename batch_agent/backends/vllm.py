@@ -32,6 +32,17 @@ logger = logging.getLogger(__name__)
 
 
 class VLLMBackend(OpenAIBackend):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        base_url: str = "http://localhost:8000",
+        *,
+        block_sharing_probe_agents: int = 4,
+        block_sharing_usage_tolerance: float = 0.005,
+    ) -> None:
+        super().__init__(api_key=api_key, base_url=base_url)
+        self.block_sharing_probe_agents = block_sharing_probe_agents
+        self.block_sharing_usage_tolerance = block_sharing_usage_tolerance
 
     @classmethod
     def from_url(cls, url: str) -> "VLLMBackend":
@@ -69,11 +80,68 @@ class VLLMBackend(OpenAIBackend):
                     headers={"authorization": f"Bearer {self.api_key}"},
                 )
                 if pin_resp.status_code == 200:
-                    logger.debug("Pinned prefix block %s", phash[:12])
+                    payload = pin_resp.json()
+                    if phash in payload.get("pinned", {}):
+                        logger.debug("Pinned prefix block %s", phash[:12])
+                    else:
+                        logger.debug("Pin blocks did not map prefix %s: %s", phash[:12], payload.get("note", "missing"))
             except Exception as e:
                 logger.debug("Pin blocks call skipped (%s) — vLLM patch not installed", e)
 
+        await self._verify_prefix_block_sharing(shared, model)
         return phash
+
+    async def _verify_prefix_block_sharing(self, shared: SharedContext, model: str) -> None:
+        """Probe that repeated same-prefix requests do not grow GPU cache usage.
+
+        PagedAttention prefix sharing should keep vLLM GPU cache usage flat, or
+        close to flat, when several agents hit the same warmed prefix.
+        """
+        if self.block_sharing_probe_agents <= 0:
+            return
+        before = await self._gpu_cache_usage_perc()
+        if before is None:
+            return
+
+        async with httpx.AsyncClient(timeout=PREFIX_WARM_TIMEOUT) as client:
+            for _ in range(self.block_sharing_probe_agents):
+                try:
+                    response = await client.post(
+                        f"{self.base_url}/v1/chat/completions",
+                        json={
+                            "model": model,
+                            "messages": [{"role": "system", "content": shared.prefix},
+                                         {"role": "user", "content": "ping"}],
+                            "max_tokens": 1,
+                        },
+                        headers={"authorization": f"Bearer {self.api_key}"},
+                    )
+                    response.raise_for_status()
+                except Exception as e:
+                    logger.debug("prefix sharing probe skipped after request failure: %s", e)
+                    return
+
+        after = await self._gpu_cache_usage_perc()
+        if after is None:
+            return
+        if after > before + self.block_sharing_usage_tolerance:
+            logger.warning(
+                "vLLM prefix block sharing may not be working: gpu_cache_usage_perc "
+                "increased from %.4f to %.4f after %d same-prefix probes",
+                before,
+                after,
+                self.block_sharing_probe_agents,
+            )
+
+    async def _gpu_cache_usage_perc(self) -> float | None:
+        try:
+            raw = await self._scrape_vllm_metrics()
+        except Exception:
+            return None
+        for name, value in raw.items():
+            if "gpu_cache_usage_perc" in name or "gpu_cache_usage" in name:
+                return value
+        return None
 
     def backend_capabilities(self) -> dict[str, Any]:
         return {

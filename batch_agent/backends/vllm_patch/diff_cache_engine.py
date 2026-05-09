@@ -46,12 +46,14 @@ class CompressionStats:
 
 
 class BlockHasher:
-    def __init__(self, block_size_tokens: int = 16) -> None:
-        self.block_size_tokens = block_size_tokens
+    def __init__(self, block_size: int = 16) -> None:
+        if block_size <= 0:
+            raise ValueError("block_size must be positive")
+        self.block_size = block_size
 
     def split_blocks(self, tokens: Iterable[int]) -> list[tuple[int, ...]]:
         values = list(tokens)
-        return [tuple(values[i:i + self.block_size_tokens]) for i in range(0, len(values), self.block_size_tokens)]
+        return [tuple(values[i:i + self.block_size]) for i in range(0, len(values), self.block_size)]
 
     def hash_block(self, block: tuple[int, ...]) -> str:
         payload = ",".join(str(t) for t in block).encode("utf-8")
@@ -69,10 +71,19 @@ class DiffCacheEngine(_VLLMCacheEngine):
     unique blocks for that agent.
     """
 
-    def __init__(self, *args: Any, block_size_tokens: int = 16, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *args: Any,
+        block_size: int = 16,
+        block_size_tokens: int | None = None,
+        **kwargs: Any,
+    ) -> None:
         if _VLLMCacheEngine is not object:
             super().__init__(*args, **kwargs)  # type: ignore[misc]
-        self.hasher = BlockHasher(block_size_tokens=block_size_tokens)
+        if block_size_tokens is not None:
+            block_size = block_size_tokens
+        self.block_size = block_size
+        self.hasher = BlockHasher(block_size=block_size)
         self.global_block_store: dict[str, tuple[int, ...]] = {}
         self.reference_counts: dict[str, int] = {}
         self.agent_diffs: dict[str, EncodedAgentDiff] = {}

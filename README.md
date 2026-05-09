@@ -178,7 +178,7 @@ Capabilities come from `BackendAdapter.backend_capabilities()`:
 |---|---|---|---|---|---|
 | Anthropic API | `anthropic://` | — | — | — | 5 |
 | OpenAI API | `openai://host` | — | — | — | 5 |
-| **vLLM** | `vllm://host:8000` | ✓ | ✓ | ✓ | 64 |
+| **vLLM** | `vllm://host:8000` | ✓ | ⚠️ hints emit; prefetch blocked pending scheduler integration | ✓ | 64 |
 | **SGLang** | `sglang://host:30000` | — | ✓ | — | 64 |
 | AWS Bedrock | `bedrock://region` | — | — | — | 1–3 (AIMD) |
 
@@ -197,7 +197,9 @@ Capabilities come from `BackendAdapter.backend_capabilities()`:
 
 3. **Bedrock TTFT does not improve with prompt caching at <8K tokens.** Confirmed across 10 sequential identical requests. Cache writes tokens, not latency savings at this scale. Source: `bedrock_cache_isolation/results.json`.
 
-4. **Distributed mode is a prototype.** `RedisStreamsStateStore` and `DistributedWaveScheduler` are tested with a mock Redis, not a real cluster. 1,000-agent benchmark requires 4 nodes and has not been run.
+4. **KVFlow prefetch is not yet verified.** Measurement-integrity rerun on A10G + Qwen2.5-7B produced A/B/C turn-2 TTFT P50 of `2.626960s` / `2.846764s` / `3.031180s`; the corrected patch moved `0` block pairs because vLLM 0.6.6 requires scheduler-owned CPU→GPU swap mappings, not `kv_key`-only hints. Source: `kvflow_measurement_integrity/results.json`.
+
+5. **Distributed mode is a prototype.** `RedisStreamsStateStore` and `DistributedWaveScheduler` are tested with a mock Redis, not a real cluster. 1,000-agent benchmark requires 4 nodes and has not been run.
 
 ---
 
@@ -208,8 +210,8 @@ Capabilities come from `BackendAdapter.backend_capabilities()`:
 | 0 — Foundation | ✅ | Multi-turn loop, W5 semaphore fix, tool coalescing |
 | 1 — Inference | ✅ | vLLM native, prefix warming, priority queue |
 | 2 — Scale | ✅ | 500-agent benchmark, retry, compaction, checkpointing, reduce |
-| 3A — KVFlow | ✅ mock / ⏳ GPU | Advisor + backpressure working; GPU KV prefetch needs vLLM patch |
+| 3A — KVFlow | ⚠️ blocked | Advisor emits hints, but vLLM prefetch needs scheduler integration; A/B/C measurement did not confirm prefetch benefit |
 | 3B — TokenDance | ✅ mock | 18.76× compression in synthetic test; live vLLM patch pending |
 | 3C — SGLang | ✅ mock | Full adapter; live GPU test pending |
 | 4 — Distributed | ⏳ prototype | Mock Redis tested; real cluster + 1,000-agent benchmark pending |
-| **Publish** | **blocked** | Blocked on: 70B benchmark, live KVFlow measurement, cost comparison |
+| **Publish** | **blocked** | Blocked on: 70B benchmark and final publish decision |

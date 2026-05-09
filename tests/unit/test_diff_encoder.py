@@ -26,7 +26,7 @@ def test_tokendance_diff_encoder_compression_ratio_at_100_agents() -> None:
         AgentKVSnapshot(job_id=f"job-{i}", tokens=_make_tokens(i), turn=4)
         for i in range(100)
     ]
-    engine = DiffCacheEngine(block_size_tokens=16)
+    engine = DiffCacheEngine(block_size=16)
     encoded = asyncio.run(engine.all_gather(
         snapshots,
         soft_timeout_seconds=10.0,
@@ -36,3 +36,11 @@ def test_tokendance_diff_encoder_compression_ratio_at_100_agents() -> None:
     assert len(encoded) == 100
     assert stats.compression_ratio >= 10.0
     assert stats.agents_encoded == 100
+
+
+def test_diff_encoder_splits_only_on_vllm_block_boundaries() -> None:
+    engine = DiffCacheEngine(block_size=16)
+    blocks = engine.hasher.split_blocks(range(33))
+    assert blocks[0] == tuple(range(16))
+    assert blocks[1] == tuple(range(16, 32))
+    assert blocks[2] == (32,)

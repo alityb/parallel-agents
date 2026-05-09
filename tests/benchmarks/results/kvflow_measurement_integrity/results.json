@@ -1,0 +1,332 @@
+{
+  "b_minus_a_turn2_p50_seconds": 0.21980384499875072,
+  "c_minus_a_turn2_p50_seconds": 0.40421928700015997,
+  "condition_a_no_hints": {
+    "cache_after": {
+      "gpu_utilization": 0.0,
+      "prefix_cache_hit_rate": 0.9868534592152682
+    },
+    "cache_before": {
+      "gpu_utilization": 0.0,
+      "prefix_cache_hit_rate": 0.9854751773049645
+    },
+    "cache_delta": {
+      "prefix_cache_hit_rate_after": 0.9868534592152682,
+      "prefix_cache_hit_rate_before": 0.9854751773049645,
+      "prefix_cache_hit_rate_delta_window": null,
+      "prefix_cache_hit_tokens_delta": 0.0,
+      "prefix_cache_query_tokens_delta": 0.0
+    },
+    "condition": "A_no_hints",
+    "failed": 0,
+    "kvflow": false,
+    "n": 20,
+    "ok": 20,
+    "prefetch_block_pairs_total": 0,
+    "prefetch_missing_total": 0,
+    "prefetch_response_samples": [],
+    "prefetch_statuses": [],
+    "throughput": 1.5302882717449657,
+    "turn1_ttft_p50": 2.9052493710005365,
+    "turn1_ttft_p95": 3.1210559050014126,
+    "turn2_ttft_after_tool_wait_p50": 2.6269602770007623,
+    "turn2_ttft_after_tool_wait_p95": 2.9705192419987725,
+    "wall_seconds": 13.069432975000382,
+    "warm_prefix_verification": null
+  },
+  "condition_b_hints_rejected": {
+    "cache_after": {
+      "gpu_utilization": 0.0,
+      "prefix_cache_hit_rate": 0.9880760554302288
+    },
+    "cache_before": {
+      "gpu_utilization": 0.0,
+      "prefix_cache_hit_rate": 0.9868534592152682
+    },
+    "cache_delta": {
+      "prefix_cache_hit_rate_after": 0.9880760554302288,
+      "prefix_cache_hit_rate_before": 0.9868534592152682,
+      "prefix_cache_hit_rate_delta_window": null,
+      "prefix_cache_hit_tokens_delta": 0.0,
+      "prefix_cache_query_tokens_delta": 0.0
+    },
+    "condition": "B_hints_rejected",
+    "failed": 0,
+    "kvflow": true,
+    "n": 20,
+    "ok": 20,
+    "prefetch_block_pairs_total": 0,
+    "prefetch_missing_total": 241,
+    "prefetch_response_samples": [
+      {
+        "missing": [
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2"
+        ],
+        "note": "kv_key-only hints cannot be safely converted to swap_in pairs; vLLM swap_in requires CPU->GPU mappings from BlockSpaceManager.swap_in(seq_group)",
+        "ok": true,
+        "prefetched": {},
+        "resident_block_tables": {}
+      },
+      {
+        "missing": [
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2"
+        ],
+        "note": "kv_key-only hints cannot be safely converted to swap_in pairs; vLLM swap_in requires CPU->GPU mappings from BlockSpaceManager.swap_in(seq_group)",
+        "ok": true,
+        "prefetched": {},
+        "resident_block_tables": {}
+      },
+      {
+        "missing": [
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2"
+        ],
+        "note": "kv_key-only hints cannot be safely converted to swap_in pairs; vLLM swap_in requires CPU->GPU mappings from BlockSpaceManager.swap_in(seq_group)",
+        "ok": true,
+        "prefetched": {},
+        "resident_block_tables": {}
+      },
+      {
+        "missing": [
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2"
+        ],
+        "note": "kv_key-only hints cannot be safely converted to swap_in pairs; vLLM swap_in requires CPU->GPU mappings from BlockSpaceManager.swap_in(seq_group)",
+        "ok": true,
+        "prefetched": {},
+        "resident_block_tables": {}
+      },
+      {
+        "missing": [
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2"
+        ],
+        "note": "kv_key-only hints cannot be safely converted to swap_in pairs; vLLM swap_in requires CPU->GPU mappings from BlockSpaceManager.swap_in(seq_group)",
+        "ok": true,
+        "prefetched": {},
+        "resident_block_tables": {}
+      }
+    ],
+    "prefetch_statuses": [
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200
+    ],
+    "throughput": 2.2834824574566914,
+    "turn1_ttft_p50": 2.8615279650002776,
+    "turn1_ttft_p95": 3.154193956999734,
+    "turn2_ttft_after_tool_wait_p50": 2.846764121999513,
+    "turn2_ttft_after_tool_wait_p95": 3.3086379449996457,
+    "wall_seconds": 8.758552068000427,
+    "warm_prefix_verification": null
+  },
+  "condition_c_hints_rejected_warm_verified": {
+    "cache_after": {
+      "gpu_utilization": 0.0,
+      "prefix_cache_hit_rate": 0.9889952956989247
+    },
+    "cache_before": {
+      "gpu_utilization": 0.0,
+      "prefix_cache_hit_rate": 0.9881110856093642
+    },
+    "cache_delta": {
+      "prefix_cache_hit_rate_after": 0.9889952956989247,
+      "prefix_cache_hit_rate_before": 0.9881110856093642,
+      "prefix_cache_hit_rate_delta_window": null,
+      "prefix_cache_hit_tokens_delta": 0.0,
+      "prefix_cache_query_tokens_delta": 0.0
+    },
+    "condition": "C_hints_rejected_warm_verified",
+    "failed": 0,
+    "kvflow": true,
+    "n": 20,
+    "ok": 20,
+    "prefetch_block_pairs_total": 0,
+    "prefetch_missing_total": 210,
+    "prefetch_response_samples": [
+      {
+        "missing": [
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2"
+        ],
+        "note": "kv_key-only hints cannot be safely converted to swap_in pairs; vLLM swap_in requires CPU->GPU mappings from BlockSpaceManager.swap_in(seq_group)",
+        "ok": true,
+        "prefetched": {},
+        "resident_block_tables": {}
+      },
+      {
+        "missing": [
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2"
+        ],
+        "note": "kv_key-only hints cannot be safely converted to swap_in pairs; vLLM swap_in requires CPU->GPU mappings from BlockSpaceManager.swap_in(seq_group)",
+        "ok": true,
+        "prefetched": {},
+        "resident_block_tables": {}
+      },
+      {
+        "missing": [
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2"
+        ],
+        "note": "kv_key-only hints cannot be safely converted to swap_in pairs; vLLM swap_in requires CPU->GPU mappings from BlockSpaceManager.swap_in(seq_group)",
+        "ok": true,
+        "prefetched": {},
+        "resident_block_tables": {}
+      },
+      {
+        "missing": [
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2"
+        ],
+        "note": "kv_key-only hints cannot be safely converted to swap_in pairs; vLLM swap_in requires CPU->GPU mappings from BlockSpaceManager.swap_in(seq_group)",
+        "ok": true,
+        "prefetched": {},
+        "resident_block_tables": {}
+      },
+      {
+        "missing": [
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2",
+          "3de5afb885f135cce8d9c28278391ca9583e7bf12d7f5890745ff52b9e7876f2"
+        ],
+        "note": "kv_key-only hints cannot be safely converted to swap_in pairs; vLLM swap_in requires CPU->GPU mappings from BlockSpaceManager.swap_in(seq_group)",
+        "ok": true,
+        "prefetched": {},
+        "resident_block_tables": {}
+      }
+    ],
+    "prefetch_statuses": [
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200
+    ],
+    "throughput": 2.0175041278874386,
+    "turn1_ttft_p50": 2.9502037210004346,
+    "turn1_ttft_p95": 5.110900510999272,
+    "turn2_ttft_after_tool_wait_p50": 3.0311795640009223,
+    "turn2_ttft_after_tool_wait_p95": 4.106545056998584,
+    "wall_seconds": 9.9132387009995,
+    "warm_prefix_verification": {
+      "after_probe": {
+        "gpu_utilization": 0.0,
+        "prefix_cache_hit_rate": 0.9881110856093642
+      },
+      "after_warm": {
+        "gpu_utilization": 0.0,
+        "prefix_cache_hit_rate": 0.9880935962855698
+      },
+      "before": {
+        "gpu_utilization": 0.0,
+        "prefix_cache_hit_rate": 0.9880760554302288
+      },
+      "kv_key": "fbf54661abb72d7c5d61dd91d6120e880030c08d8d8c9918a1a5cf1729eb9246",
+      "probe_delta": {
+        "prefix_cache_hit_rate_after": 0.9881110856093642,
+        "prefix_cache_hit_rate_before": 0.9880935962855698,
+        "prefix_cache_hit_rate_delta_window": null,
+        "prefix_cache_hit_tokens_delta": 0.0,
+        "prefix_cache_query_tokens_delta": 0.0
+      },
+      "warm_delta": {
+        "prefix_cache_hit_rate_after": 0.9880935962855698,
+        "prefix_cache_hit_rate_before": 0.9880760554302288,
+        "prefix_cache_hit_rate_delta_window": null,
+        "prefix_cache_hit_tokens_delta": 0.0,
+        "prefix_cache_query_tokens_delta": 0.0
+      }
+    }
+  },
+  "finding": "no_measurable_prefetch_effect_a_b_c_similar",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "n_agents": 20,
+  "significance_threshold_seconds": 0.02,
+  "tool_latency_ms": 300
+}

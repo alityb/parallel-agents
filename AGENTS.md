@@ -100,7 +100,7 @@ This is a batch execution engine. Input list in, result list out, as fast as phy
 │                                                                   │
 │  ┌────────────────────────────────────────────────────────────┐   │
 │  │   KVFlow Prefetch Controller                                │   │
-│  │   (moves KV tensors CPU→GPU before agent activates)        │   │
+│  │   (emits scheduler hints; vLLM swap-in integration pending) │   │
 │  └────────────────────────────────────────────────────────────┘   │
 │                                                                   │
 │  ┌────────────────────────────────────────────────────────────┐   │
@@ -110,7 +110,7 @@ This is a batch execution engine. Input list in, result list out, as fast as phy
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**New in this revision:** The KVFlow Advisor sits inside the orchestration layer and maintains a real-time map of `{job_id → estimated_next_activation_time}`. It pushes prefetch hints to the inference adapter continuously. The adapter moves KV tensors from CPU to GPU *before* an agent reactivates, eliminating cold KV reloads.
+**New in this revision:** The KVFlow Advisor sits inside the orchestration layer and maintains a real-time map of `{job_id → estimated_next_activation_time}`. It pushes prefetch hints to the inference adapter continuously. Measurement-integrity reruns on vLLM 0.6.6 showed that `kv_key`-only API hints cannot safely move KV tensors; correct prefetch requires scheduler-integrated CPU→GPU swap mappings.
 
 ---
 
@@ -220,11 +220,11 @@ hints = [
 await adapter.send_prefetch_hints(hints)
 ```
 
-The adapter translates these into vLLM/SGLang prefetch calls that move KV tensors from CPU to GPU ahead of time.
+The adapter translates these into backend prefetch hints. For vLLM 0.6.6, these hints are not sufficient by themselves: the scheduler owns the swapped `SequenceGroup`, block table, and CPU→GPU mapping needed by `CacheEngine.swap_in()`.
 
-**Why this matters:** Without KVFlow, when an agent exits `TOOL_WAIT`, vLLM may need to reload its KV tensors from CPU (~50–200ms depending on context length). With KVFlow, those tensors are already on GPU. The KVFlow paper reports 1.83x speedup for single workflows and 2.19x for concurrent workflows vs SGLang. This is achievable without patching vLLM's allocation logic — it requires only a prefetch API endpoint.
+**Why this matters:** Without KVFlow, when an agent exits `TOOL_WAIT`, vLLM may need to reload its KV tensors from CPU (~50–200ms depending on context length). With correct scheduler integration, those tensors can be on GPU before reactivation. The KVFlow paper reports 1.83x speedup for single workflows and 2.19x for concurrent workflows vs SGLang, but BatchAgent has not yet verified a prefetch-specific improvement on vLLM.
 
-**Implementation path:** vLLM does not have a public prefetch API. We add one: a `/internal/prefetch` route that accepts `(kv_key, priority)` pairs and triggers async CPU→GPU transfers. This reuses existing vLLM swap infrastructure (~100 lines of new code). SGLang's RadixAttention may support this more naturally via its existing token-level tree structure. Prototype both; choose the one that works first.
+**Implementation path:** vLLM does not have a public prefetch API. The earlier `/internal/prefetch` route is useful for accepting hints and rejecting unsafe requests, but a standalone route cannot translate BatchAgent prefix hashes into `swap_in()` block mappings. vLLM integration must happen in or adjacent to `Scheduler._schedule_swapped()` and `BlockSpaceManager.swap_in(seq_group)`, where the scheduler has the swapped sequence group, block tables, allocator state, and scheduling budget. SGLang's RadixAttention may support this more naturally via its token-level tree structure. Prototype both; choose the one that works first.
 
 ---
 
@@ -280,7 +280,7 @@ async def handle_prefetch_hints(hints: list[PrefetchHint]):
             )
 ```
 
-**vLLM implementation:** Add `/internal/prefetch` to vLLM's API server. Route calls `cache_engine.prefetch(block_ids, destination="gpu")`. `CacheEngine` already has CPU↔GPU transfer infrastructure for swap operations — we reuse it.
+**vLLM implementation:** `/internal/prefetch` can accept hints and explicit CPU→GPU block-pair mappings, but `kv_key`-only hints must be rejected. vLLM 0.6.6 creates valid mappings inside `BlockSpaceManager.swap_in(seq_group)`, called from `Scheduler._schedule_swapped()`. Correct prefetch requires feeding BatchAgent ETA/priority hints into that scheduler path.
 
 **SGLang alternative:** SGLang's RadixAttention tracks token-level prefix trees. Prefetching for a specific agent means prefetching the leaf node of its context tree. Prototype both vLLM and SGLang paths; pick whichever is less invasive.
 
@@ -299,7 +299,7 @@ After turn 1, each agent's context diverges. TokenDance approach:
 - v1: patch vLLM `CacheEngine` directly. Pin to specific vLLM version.
 - Gate behind `diff_kv=True`. Default off.
 
-**Relationship to KVFlow:** Complementary, not competing. KVFlow reduces KV reload *latency* (prefetch). TokenDance reduces KV storage *volume* (compression). Both enabled simultaneously in Phase 3.
+**Relationship to KVFlow:** Complementary, not competing. KVFlow targets KV reload *latency* through scheduler-integrated prefetch. TokenDance reduces KV storage *volume* through compression. Both can be enabled simultaneously once the scheduler path is implemented.
 
 #### 3.5.4 API Mode (Degraded)
 
@@ -374,13 +374,13 @@ vLLM native mode, prefix warming, priority queue, staggered dispatch, heterogene
 
 **Goal:** The scheduler tells the GPU what's coming. The GPU acts on it.
 
-**Why 3A before 3B:** KVFlow requires a smaller vLLM surface change (add prefetch API) than TokenDance (subclass CacheEngine). Delivers measurable speedup independently. Complete 3A first; 3B builds on the same infrastructure.
+**Why 3A before 3B:** KVFlow still has a smaller surface area than TokenDance, but measurement showed it is not just an API route. It needs a scheduler-integrated hint path so vLLM can produce safe CPU→GPU swap mappings before reactivation. Complete 3A first; 3B builds on the same scheduling and block-table understanding.
 
 Tasks:
 - [ ] Implement `KVFlowAdvisor`: maintain `steps_to_execution` per agent, emit hints every 500ms
 - [ ] Add `estimated_next_activation` and `historical_turn_latencies` to `AgentState`
 - [ ] Instrument turn latency tracking in Wave Scheduler
-- [ ] Add `/internal/prefetch` route to vLLM (~100 lines, reuse swap infrastructure)
+- [ ] Add scheduler-integrated vLLM prefetch path that feeds hints into `Scheduler._schedule_swapped()` / `BlockSpaceManager.swap_in(seq_group)`
 - [ ] Implement `KVFlowPrefetchController` in vLLM adapter
 - [ ] Prototype same against SGLang — compare implementation complexity, choose primary backend
 - [ ] Implement model-based message compaction (was stubbed in Phase 2)
@@ -391,6 +391,8 @@ Tasks:
 - Agents returning from TOOL_WAIT: TTFT ≤ 50ms (vs ~200ms cold reload for a 4-turn context)
 - KVFlow Advisor prefetch accuracy ≥ 80%
 - No regression in Phase 2 benchmark results
+
+**Measurement integrity update (2026-05-09):** A/B/C rerun on A10G + Qwen2.5-7B showed no prefetch-specific improvement. A no-hint turn-2 TTFT P50 was `2.626960s`; B with hints rejected by the corrected patch was `2.846764s`; C with warm-prefix verification plus rejected hints was `3.031180s`. Both B and C moved `0` block pairs. Conclusion: the prior 72ms result was not confirmed as KVFlow prefetch; vLLM prefetch is blocked pending scheduler integration.
 
 ---
 
@@ -802,7 +804,7 @@ async def get_paper_metadata(paper_id: int) -> PaperMeta:
 | Priority queue | ✅ | ✅ | ✅ |
 | Prefix caching (API) | ✅ | ✅ | ✅ |
 | Prefix caching (vLLM, live) | Untested on GPU | ✅ tested + pinned | ✅ |
-| KVFlow prefetch | ❌ | ✅ | ✅ |
+| KVFlow prefetch | hints only; vLLM scheduler integration pending | ✅ scheduler-integrated | ✅ |
 | TokenDance diff KV | ❌ | ✅ (flag-gated) | ✅ |
 | SGLang backend | Stub | ✅ | ✅ |
 | Model-based compaction | Heuristic only | ✅ | ✅ |
@@ -831,7 +833,7 @@ The SDK is done when:
 1. A researcher runs `pip install batch-agent` and summarizes 100 papers with a 10-line script.
 2. Self-hosted vLLM delivers ≥3x better cost-per-task vs naive parallel API calls at N=100.
 3. Prefix cache hit rate ≥95% in steady state.
-4. Agents returning from TOOL_WAIT show ≤50ms TTFT with KVFlow enabled.
+4. Agents returning from TOOL_WAIT show ≤50ms TTFT with scheduler-integrated KVFlow enabled.
 5. KV storage per agent with TokenDance ≥10x lower than full-copy storage at N=100.
 6. 500 concurrent agents: no OOM, no unhandled exceptions, ≤2% failure rate.
 7. 1,000 agents across 4 nodes with linear throughput scaling (Phase 4).

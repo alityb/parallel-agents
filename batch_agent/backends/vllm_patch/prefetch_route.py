@@ -3,14 +3,15 @@
 Target vLLM version: 0.6.x.
 
 These helpers are intentionally small and reuse vLLM's existing CacheEngine swap
-infrastructure. They do not implement tensor transfer logic themselves.
+infrastructure. They do not implement tensor transfer logic themselves, and they
+do not treat resident PagedAttention block-table IDs as swap-in mappings.
 
 Expected integration point in vLLM 0.6.x:
   - Register these routes in vllm/entrypoints/openai/api_server.py after the app
     and engine/client are initialized.
-  - Provide `cache_engine` (object exposing `prefetch(block_ids)` or
+  - Provide `cache_engine` (object exposing `prefetch(block_pairs)` or
     `swap_in(src_to_dst)`)
-    and a `kv_registry` mapping kv_key -> list[int block_ids].
+    and a `kv_registry` mapping kv_key -> explicit CPU->GPU block pairs.
 
 The SDK sends hints shaped like:
   {"job_id": "job-1", "kv_key": "abc", "priority": 1.0, "eta_seconds": 0.3}
@@ -44,20 +45,21 @@ def _coerce_hints(payload: Mapping[str, Any]) -> list[InternalPrefetchHint]:
 
 
 def _coerce_block_pairs(blocks: Sequence[Any]) -> list[list[int]]:
-    """Return vLLM swap_in pairs from either block IDs or explicit pairs.
+    """Return vLLM swap_in pairs from explicit CPU->GPU mappings.
 
     vLLM 0.6.6 CacheEngine.swap_in expects a CPU tensor shaped ``[-1, 2]``:
-    ``[cpu_block_id, gpu_block_id]``. For a plain list of block IDs, we use
-    the same ID for source and destination; callers that know both IDs can pass
-    explicit ``[[cpu_id, gpu_id], ...]`` pairs.
+    ``[cpu_block_id, gpu_block_id]``. Resident GPU block-table IDs returned by
+    BlockSpaceManager.get_block_table() are not valid swap_in source IDs.
     """
     pairs: list[list[int]] = []
     for block in blocks:
         if isinstance(block, (list, tuple)) and len(block) == 2:
             pairs.append([int(block[0]), int(block[1])])
         else:
-            bid = int(block)
-            pairs.append([bid, bid])
+            raise ValueError(
+                "prefetch requires explicit [cpu_block_id, gpu_block_id] pairs; "
+                "resident GPU block IDs are not valid swap_in input"
+            )
     return pairs
 
 
@@ -86,12 +88,15 @@ async def handle_prefetch_request(
     payload: Mapping[str, Any],
     *,
     cache_engine: Any,
-    kv_registry: Mapping[str, list[int]],
+    kv_registry: Mapping[str, Sequence[Any]],
 ) -> dict[str, Any]:
     """Map request blocks/kv_keys to block pairs and call CacheEngine swap-in."""
     direct_blocks = payload.get("block_ids") or payload.get("blocks")
     if direct_blocks:
-        block_pairs = _coerce_block_pairs(direct_blocks)
+        try:
+            block_pairs = _coerce_block_pairs(direct_blocks)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc), "prefetched": {}, "missing": []}
         await _prefetch_block_pairs(cache_engine, block_pairs)
         return {"ok": True, "prefetched": {"__direct__": block_pairs}, "missing": []}
 
@@ -112,7 +117,10 @@ async def handle_prefetch_request(
         if not block_ids:
             missing.append(hint.kv_key)
             continue
-        block_pairs = _coerce_block_pairs(block_ids)
+        try:
+            block_pairs = _coerce_block_pairs(block_ids)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc), "prefetched": prefetched, "missing": missing}
         await _prefetch_block_pairs(cache_engine, block_pairs)
         prefetched[hint.kv_key] = block_pairs
 
@@ -123,7 +131,7 @@ async def handle_pin_blocks_request(
     payload: Mapping[str, Any],
     *,
     block_manager: Any,
-    kv_registry: Mapping[str, list[int]],
+    kv_registry: Mapping[str, Sequence[Any]],
 ) -> dict[str, Any]:
     """Pin blocks so the shared prefix survives LRU eviction."""
     kv_keys = payload.get("kv_keys", [])
@@ -134,6 +142,10 @@ async def handle_pin_blocks_request(
         if not block_ids:
             missing.append(kv_key)
             continue
+        try:
+            block_ids = [pair[1] for pair in _coerce_block_pairs(block_ids)]
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc), "pinned": pinned, "missing": missing}
         if hasattr(block_manager, "pin_blocks"):
             block_manager.pin_blocks(block_ids)
         else:
@@ -147,7 +159,13 @@ async def handle_pin_blocks_request(
     return {"ok": True, "pinned": pinned, "missing": missing}
 
 
-def register_prefetch_routes(app: Any, *, cache_engine: Any, block_manager: Any, kv_registry: Mapping[str, list[int]]) -> None:
+def register_prefetch_routes(
+    app: Any,
+    *,
+    cache_engine: Any,
+    block_manager: Any,
+    kv_registry: Mapping[str, Sequence[Any]],
+) -> None:
     """Register FastAPI routes on a vLLM API server app.
 
     FastAPI is imported only by the host process that calls this function.

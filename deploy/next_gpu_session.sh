@@ -28,7 +28,7 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 + VLLM_SRC=\$(python3 - <<'PY' ...) python3 $SCRIPT_DIR/apply_vllm_patch.py
 + cd $REPO
 + tmux kill-session -t vllm
-+ tmux new-session -d -s vllm 'python -m vllm.entrypoints.openai.api_server --model $MODEL --host 0.0.0.0 --port 8000 --enable-prefix-caching --gpu-memory-utilization 0.85 --max-model-len 8192 --dtype bfloat16 --enable-auto-tool-choice --tool-call-parser hermes --disable-frontend-multiprocessing'
++ tmux new-session -d -s vllm 'python -m vllm.entrypoints.openai.api_server --model $MODEL --host 0.0.0.0 --port 8000 --enable-prefix-caching --enable-chunked-prefill --gpu-memory-utilization 0.85 --max-model-len 8192 --dtype bfloat16 --enable-auto-tool-choice --tool-call-parser hermes --disable-frontend-multiprocessing'
 + curl -sf http://localhost:8000/health
 + curl -X POST http://localhost:8000/internal/prefetch ...
 + PYTHONPATH=$REPO python3 $SCRIPT_DIR/kvflow_benchmark.py
@@ -133,6 +133,7 @@ tmux new-session -d -s vllm "
   python -m vllm.entrypoints.openai.api_server \
     --model $MODEL --host 0.0.0.0 --port 8000 \
     --enable-prefix-caching --gpu-memory-utilization 0.85 \
+    --enable-chunked-prefill \
     --max-model-len 8192 --dtype bfloat16 \
     --enable-auto-tool-choice --tool-call-parser hermes \
     --disable-frontend-multiprocessing \

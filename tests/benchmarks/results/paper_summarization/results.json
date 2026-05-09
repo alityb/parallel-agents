@@ -4,6 +4,25 @@
     "mock_batchagent"
   ],
   "failure_rate": 0.0,
+  "live_vllm": {
+    "configs_requested": [
+      "D_vllm_naive",
+      "E_vllm_batchagent"
+    ],
+    "gpu_memory_peak": null,
+    "prefix_cache_hit_rate": null,
+    "reason": "deploy/runpod_template.json and deploy/vllm_server.sh are absent in this repo; no RunPod API token or GPU provisioning capability is available from this environment.",
+    "recorded_at": 1778292348.171298,
+    "scales_requested": [
+      10,
+      50,
+      100
+    ],
+    "status": "blocked",
+    "ttft_cold_p50_p95": null,
+    "ttft_warm_p50_p95": null,
+    "wall_clock_all_results": null
+  },
   "mode": "mock",
   "n": 50,
   "status": "ok",

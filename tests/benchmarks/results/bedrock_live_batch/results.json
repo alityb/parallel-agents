@@ -1,0 +1,107 @@
+{
+  "cachePoint_requested": true,
+  "cachePoint_tokens_visible": true,
+  "cache_usage_keys": [
+    "cacheReadInputTokens",
+    "cacheWriteInputTokens"
+  ],
+  "cost_source": "Bedrock response usage fields include tokens but no dollar cost; exact USD requires AWS Pricing/CUR. Not computed to avoid wrong pricing for Opus 4.5.",
+  "estimated_cost_usd": null,
+  "failed": 7,
+  "model": "us.anthropic.claude-opus-4-5-20251101-v1:0",
+  "n": 20,
+  "ok": 13,
+  "region": "us-east-1",
+  "total_cache_read_input_tokens": 0,
+  "total_cache_write_input_tokens": 0,
+  "total_input_tokens": 1807,
+  "total_output_tokens": 635,
+  "ttft_p50_seconds": 0.0006663540843874216,
+  "ttft_p95_seconds": 0.0010779581498354673,
+  "ttft_seconds": [
+    0.0006635000463575125,
+    0.0006501669995486736,
+    0.0010100831277668476,
+    0.002066291170194745,
+    0.0010779581498354673,
+    0.0006692081224173307,
+    0.000398790929466486,
+    0.0005804169923067093,
+    0.0006556659936904907,
+    0.0009087498765438795
+  ],
+  "usage": [
+    {
+      "inputTokens": 139,
+      "outputTokens": 56,
+      "totalTokens": 195
+    },
+    {
+      "inputTokens": 139,
+      "outputTokens": 56,
+      "totalTokens": 195
+    },
+    {
+      "inputTokens": 139,
+      "outputTokens": 59,
+      "totalTokens": 198
+    },
+    {
+      "inputTokens": 139,
+      "outputTokens": 59,
+      "totalTokens": 198
+    },
+    {
+      "inputTokens": 139,
+      "outputTokens": 56,
+      "totalTokens": 195
+    },
+    {
+      "cacheReadInputTokens": 0,
+      "cacheWriteInputTokens": 0,
+      "inputTokens": 139,
+      "outputTokens": 31,
+      "totalTokens": 170
+    },
+    {
+      "inputTokens": 139,
+      "outputTokens": 56,
+      "totalTokens": 195
+    },
+    {
+      "cacheReadInputTokens": 0,
+      "cacheWriteInputTokens": 0,
+      "inputTokens": 139,
+      "outputTokens": 57,
+      "totalTokens": 196
+    },
+    {
+      "inputTokens": 139,
+      "outputTokens": 45,
+      "totalTokens": 184
+    },
+    {
+      "inputTokens": 139,
+      "outputTokens": 36,
+      "totalTokens": 175
+    },
+    {
+      "inputTokens": 139,
+      "outputTokens": 50,
+      "totalTokens": 189
+    },
+    {
+      "inputTokens": 139,
+      "outputTokens": 32,
+      "totalTokens": 171
+    },
+    {
+      "cacheReadInputTokens": 0,
+      "cacheWriteInputTokens": 0,
+      "inputTokens": 139,
+      "outputTokens": 42,
+      "totalTokens": 181
+    }
+  ],
+  "wall_clock_seconds": 99.72932383418083
+}

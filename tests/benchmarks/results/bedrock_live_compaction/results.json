@@ -1,0 +1,17 @@
+{
+  "chars_after": 15602,
+  "chars_before": 22762,
+  "cost_source": "Bedrock response usage fields include tokens but no dollar cost; exact USD requires AWS Pricing/CUR. Not computed to avoid wrong pricing for Opus 4.5.",
+  "estimated_cost_usd": null,
+  "input_tokens": 1618,
+  "latency_seconds": 2.6379117500036955,
+  "model": "us.anthropic.claude-opus-4-5-20251101-v1:0",
+  "output_tokens": 62,
+  "region": "us-east-1",
+  "total_tokens": 1680,
+  "usage": {
+    "inputTokens": 1618,
+    "outputTokens": 62,
+    "totalTokens": 1680
+  }
+}

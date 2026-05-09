@@ -246,3 +246,19 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 | `tokendance_compression.py` | N=100, full_blocks=16000, stored_unique_blocks=853, compression_ratio=18.76x |
 
 - Full pytest suite after benchmark additions: 56 passed.
+
+### Live Bedrock and compaction runs — 2026-05-09
+
+- AWS credential chain check succeeded with local boto3 config in `us-east-1` (`sts.get_caller_identity()` and Bedrock model/profile listing worked). Use `AWS_DEFAULT_REGION=us-east-1`; `AWS_REGION` alone is not reliable for boto3.
+- Requested Bedrock model `anthropic.claude-3-5-sonnet-20241022-v2:0` was not available in this account/region (`list_foundation_models(byProvider="Anthropic")` returned no matching 3.5 Sonnet v2 model). User instructed to use Opus 4.5 instead.
+- Live model used for Bedrock batch: `us.anthropic.claude-opus-4-5-20251101-v1:0` inference profile.
+- Bedrock live 20-agent batch result: 13 OK, 7 failed schema/response validation after retries, wall-clock `99.73s`.
+- Bedrock TTFT captured from local event-stream consumption timing: P50 `0.000666s`, P95 `0.001078s`, per-success TTFT list stored in `tests/benchmarks/results/bedrock_live_batch/results.json`. Note: Bedrock also reports service-side `latencyMs`; local TTFT is near-zero because boto3 delivers event-stream chunks after the HTTP stream is established.
+- Bedrock prompt caching metadata: `cachePoint_requested=true`; response usage exposed `cacheReadInputTokens` and `cacheWriteInputTokens` keys for some calls, but both totals were `0`. This proves cache metadata appears, but the short prompt did not generate cacheable token counts.
+- Bedrock batch token usage from response usage fields: total input tokens `1807`, total output tokens `635`, cache read input tokens `0`, cache write input tokens `0`.
+- Bedrock dollar cost: Bedrock Converse response usage fields return tokens, not USD. Exact dollars require AWS Pricing/CUR for the specific Opus 4.5 inference profile; `estimated_cost_usd` is intentionally `null` to avoid wrong pricing.
+- Model-based compaction live run used `us.anthropic.claude-opus-4-5-20251101-v1:0` because the requested Haiku compaction model/profile was blocked as legacy/not recently used in this account.
+- Live compaction prompt used: `Summarize the following tool results in 2-3 sentences, preserving all factual content: {tool_results}`.
+- Live compaction result: latency `2.638s`, chars before `22762`, chars after `15602`, input tokens `1618`, output tokens `62`, total tokens `1680`. Result stored in `tests/benchmarks/results/bedrock_live_compaction/results.json`.
+- Model-based compaction blocker is resolved for the available Opus 4.5 Bedrock profile. The original Haiku profile remains account-access blocked.
+- vLLM/RunPod live benchmark remains blocked: `deploy/runpod_template.json` and `deploy/vllm_server.sh` are absent from this repository, and no RunPod API token/GPU provisioning capability is available from this environment. Paper summarization benchmark result JSON marks configs D/E at N=10/50/100 as blocked with this exact reason.

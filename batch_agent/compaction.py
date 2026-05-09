@@ -35,9 +35,7 @@ MAX_SUMMARY_CHARS = 200     # heuristic mode: max chars per old tool result
 COMPACTION_MODEL_MAX_TOKENS = 200   # model mode: response budget for summary
 
 COMPACTION_SYSTEM_PROMPT = (
-    "You are a concise summarizer. The user will give you one or more tool result blocks. "
-    "Return a very short plain-text summary (≤ 3 sentences) of the key facts. "
-    "No JSON, no formatting, just the summary."
+    "You are a concise summarizer. Return only the requested summary."
 )
 
 
@@ -190,7 +188,10 @@ async def _compact_model_based(
             tool_content_parts.append(msg.content[:500])
 
     all_content = "\n---\n".join(tool_content_parts)
-    compaction_prompt = f"Tool results to summarize:\n\n{all_content}"
+    compaction_prompt = (
+        "Summarize the following tool results in 2-3 sentences, preserving all "
+        f"factual content: {all_content}"
+    )
 
     # Stub AgentJob and SharedContext for the compaction call
     compaction_job = AgentJob(

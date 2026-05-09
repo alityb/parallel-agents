@@ -47,6 +47,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import time
 from typing import Any
 from urllib.parse import urlparse
 
@@ -60,7 +61,8 @@ logger = logging.getLogger(__name__)
 
 def _supports_prompt_caching(model_id: str) -> bool:
     """Only anthropic.claude-* models support cachePoint on Bedrock."""
-    vendor = model_id.split(".")[0].lower() if "." in model_id else ""
+    parts = model_id.lower().split(".")
+    vendor = parts[1] if parts and parts[0] in {"us", "eu", "apac"} and len(parts) > 1 else parts[0]
     return vendor == "anthropic"
 
 
@@ -70,7 +72,8 @@ def _supports_streaming(model_id: str) -> bool:
     Conservative allow-list: claude, llama3.x, mistral.
     Falls back to converse() on any error anyway.
     """
-    vendor = model_id.split(".")[0].lower() if "." in model_id else ""
+    parts = model_id.lower().split(".")
+    vendor = parts[1] if parts and parts[0] in {"us", "eu", "apac"} and len(parts) > 1 else parts[0]
     return vendor in {"anthropic", "meta", "mistral", "amazon"}
 
 
@@ -88,6 +91,7 @@ class BedrockBackend(BackendAdapter):
         self.region = region
         self.model_id_override = model_id_override
         self._client_factory = _client_factory  # if None, uses boto3 default chain
+        self.request_metrics: list[dict[str, Any]] = []
 
     @classmethod
     def from_url(cls, url: str) -> "BedrockBackend":
@@ -185,7 +189,21 @@ class BedrockBackend(BackendAdapter):
                 )
         except Exception as exc:
             # If streaming fails (model doesn't support it), fall back to converse
-            if "stream" in str(exc).lower() or "unsupported" in str(exc).lower():
+            msg = str(exc).lower()
+            if "prompt caching" in msg or "cachepoint" in msg:
+                logger.debug("Bedrock cachePoint rejected for %s; retrying without cachePoint", model_id)
+                payload = _without_cache_point(payload)
+                if _supports_streaming(model_id):
+                    text, tool_calls, stop_reason, raw = await asyncio.wait_for(
+                        asyncio.to_thread(_sync_stream, client, payload),
+                        timeout=timeout,
+                    )
+                else:
+                    text, tool_calls, stop_reason, raw = await asyncio.wait_for(
+                        asyncio.to_thread(_sync_converse, client, payload),
+                        timeout=timeout,
+                    )
+            elif "stream" in msg or "unsupported" in msg:
                 logger.debug(
                     "converse_stream failed (%s), falling back to converse()", exc
                 )
@@ -196,6 +214,12 @@ class BedrockBackend(BackendAdapter):
             else:
                 raise
 
+        self.request_metrics.append({
+            **raw.get("metrics", {}),
+            "usage": raw.get("usage", {}),
+            "stop_reason": stop_reason,
+            "cachePointRequested": any("cachePoint" in block for block in payload.get("system", [])),
+        })
         return BackendResponse(
             content=text,
             raw=raw,
@@ -228,6 +252,14 @@ class BedrockBackend(BackendAdapter):
         return boto3.client("bedrock-runtime", **kwargs)
 
 
+def _without_cache_point(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of the payload with Converse cachePoint blocks removed."""
+    copied = dict(payload)
+    if "system" in copied:
+        copied["system"] = [block for block in copied["system"] if "cachePoint" not in block]
+    return copied
+
+
 # ── sync helpers (run inside asyncio.to_thread) ────────────────────────────────
 
 def _sync_stream(
@@ -241,9 +273,15 @@ def _sync_stream(
     tool_blocks: dict[int, dict[str, Any]] = {}   # block index → accumulator
     stop_reason = "end_turn"
     last_event: dict[str, Any] = {}
+    started = time.monotonic()
+    ttft_seconds: float | None = None
+    usage: dict[str, Any] = {}
+    metrics: dict[str, Any] = {}
+    raw_events: list[dict[str, Any]] = []
 
     for event in stream:
         last_event = event
+        raw_events.append(event)
 
         if "contentBlockStart" in event:
             data = event["contentBlockStart"]
@@ -262,12 +300,20 @@ def _sync_stream(
             idx = data["contentBlockIndex"]
             delta = data.get("delta", {})
             if "text" in delta:
+                if ttft_seconds is None:
+                    ttft_seconds = time.monotonic() - started
                 texts.append(delta["text"])
             elif "toolUse" in delta and idx in tool_blocks:
+                if ttft_seconds is None:
+                    ttft_seconds = time.monotonic() - started
                 tool_blocks[idx]["input_json"] += delta["toolUse"].get("input", "")
 
         elif "messageStop" in event:
             stop_reason = event["messageStop"].get("stopReason", "end_turn")
+        elif "metadata" in event:
+            metadata = event["metadata"]
+            usage = metadata.get("usage", {})
+            metrics = metadata.get("metrics", {})
 
     text = "".join(texts)
     tool_calls = _parse_bedrock_tool_blocks(tool_blocks)
@@ -277,7 +323,17 @@ def _sync_stream(
     else:
         normalized_stop = stop_reason  # "end_turn", "max_tokens", "stop_sequence"
 
-    return text, tool_calls, normalized_stop, {"last_event": last_event}
+    total_seconds = time.monotonic() - started
+    return text, tool_calls, normalized_stop, {
+        "last_event": last_event,
+        "events": raw_events,
+        "usage": usage,
+        "metrics": {
+            **metrics,
+            "ttft_seconds": ttft_seconds,
+            "total_seconds": total_seconds,
+        },
+    }
 
 
 def _sync_converse(
@@ -312,6 +368,7 @@ def _sync_converse(
     else:
         normalized_stop = stop_reason
 
+    response.setdefault("metrics", {})["ttft_seconds"] = None
     return text, _parse_bedrock_tool_blocks(tool_blocks), normalized_stop, response
 
 

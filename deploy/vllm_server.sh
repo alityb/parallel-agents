@@ -42,4 +42,6 @@ exec python3 -m vllm.entrypoints.openai.api_server \
   --host 0.0.0.0 \
   --port "${PORT}" \
   --enable-prefix-caching \
-  --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}"
+  --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}" \
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes

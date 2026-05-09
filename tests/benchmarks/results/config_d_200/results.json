@@ -1,0 +1,19 @@
+{
+  "config": "D-200",
+  "n": 200,
+  "mode": "naive_asyncio_gather",
+  "description": "asyncio.gather 200 simultaneous requests, no SDK, no prefix warming, 200 independent file reads",
+  "instance": "A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.20.1",
+  "ok": 200,
+  "failed": 0,
+  "wall_clock_seconds": 2.672586205999778,
+  "throughput_agents_per_sec": 74.83388171016273,
+  "ttft_p50_seconds": 0.9785022129999561,
+  "ttft_p95_seconds": 2.1166612980000536,
+  "file_reads_executed": 200,
+  "file_reads_expected": 200,
+  "prefix_cache_hit_rate_before": 0.7946,
+  "prefix_cache_hit_rate_after": 0.6338,
+  "failure_mode": "none — all 200 completed successfully",
+  "note": "Did not OOM or timeout. vLLM queued all 200 simultaneously. TTFT P50 grows from 0.208s (N=20) to 0.979s (N=200) — 4.7x increase from queue depth. Cache hit rate dropped from 79% to 63% because 200 unique no-prefix requests flood the cache."
+}

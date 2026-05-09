@@ -1,0 +1,18 @@
+{
+  "config": "D-20",
+  "n": 20,
+  "mode": "naive_asyncio_gather",
+  "description": "asyncio.gather 20 simultaneous requests, no SDK, no prefix warming, 20 independent file reads",
+  "instance": "A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.20.1",
+  "ok": 20,
+  "failed": 0,
+  "wall_clock_seconds": 0.4621283219998986,
+  "throughput_agents_per_sec": 43.278022678740705,
+  "ttft_p50_seconds": 0.2079023349997442,
+  "ttft_p95_seconds": 0.2104903919998833,
+  "file_reads_executed": 20,
+  "file_reads_expected": 20,
+  "prefix_cache_hit_rate_before": 0.8679,
+  "prefix_cache_hit_rate_after": 0.8348,
+  "note": "No shared system prompt prefix — every request starts with a fresh cold context. Cache hit rate drops because all 20 requests are unique sequences. TTFT is tight at ~208ms because all 20 fit in one batch."
+}

@@ -56,6 +56,14 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - `deploy/vllm_server.sh` already includes `--enable-chunked-prefill`. D vs E impact has not been measured after the flag; this still requires a live vLLM rerun.
 - `DiffCacheEngine` already defaults to `block_size=16`, matching vLLM PagedAttention, and unit coverage verifies splits happen only at 16-token boundaries. Synthetic compression remains `18.757327x` vs previous logged `18.76x`, effectively unchanged.
 
+### SGLang response compatibility diagnosis — 2026-05-09
+
+- LOGS contained the live SGLang summary (`0/10` and `0/50` valid SDK results) but not raw response bodies or exact per-request errors, so the exact live failure mode cannot be proven from local artifacts.
+- Implemented the most likely concrete compatibility fix: OpenAI-compatible tool parsing now accepts SGLang-style `tool_calls[].function.arguments` as either a JSON string or an already-parsed dict.
+- Also normalized OpenAI-compatible `message.content` when it arrives as `None`, a string, a list of text/content blocks, or a legacy `choices[].text` field.
+- Added mock SGLang coverage for dict-valued tool arguments. This fixes failure mode (b) in the prompt (tool call parsing producing empty/malformed results) in local tests.
+- Live SGLang remains unresolved until rerun against the GPU server with raw response capture. Validation command: `PYTHONPATH=. pytest tests/integration/test_sglang_backend.py -v` while SGLang is running, followed by `PYTHONPATH=. python deploy/sglang_benchmark.py`.
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

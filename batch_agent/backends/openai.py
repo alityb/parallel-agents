@@ -65,8 +65,8 @@ class OpenAIBackend(BackendAdapter):
         raw = response.json()
 
         choice = raw["choices"][0]
-        message = choice["message"]
-        content = message.get("content") or ""
+        message = choice.get("message") or {"content": choice.get("text", "")}
+        content = _normalise_content(message.get("content"))
         finish_reason = choice.get("finish_reason", "")
         tool_calls = _extract_tool_calls(message)
 
@@ -253,7 +253,7 @@ def _extract_tool_calls(message: dict[str, Any]) -> list[ParsedToolCall]:
         call_id = tc.get("id", "")
         func = tc.get("function", {})
         name = func.get("name", "")
-        args_str = func.get("arguments", "{}")
+        raw_args = func.get("arguments", "{}")
 
         if not call_id:
             logger.warning("OpenAI tool_call missing 'id': %s", tc)
@@ -271,16 +271,20 @@ def _extract_tool_calls(message: dict[str, Any]) -> list[ParsedToolCall]:
             ))
             continue
 
-        # Parse arguments JSON
-        try:
-            args = json.loads(args_str) if args_str else {}
-        except json.JSONDecodeError as exc:
-            logger.warning("OpenAI tool_call '%s' has malformed arguments: %s", name, exc)
-            parsed.append(ParsedToolCall(
-                id=call_id, name=name, args={},
-                error=True, error_message=f"malformed arguments JSON: {exc}",
-            ))
-            continue
+        # Parse arguments JSON. SGLang can return a dict here instead of the
+        # OpenAI stringified-JSON convention.
+        if isinstance(raw_args, dict):
+            args = raw_args
+        else:
+            try:
+                args = json.loads(raw_args) if raw_args else {}
+            except (json.JSONDecodeError, TypeError) as exc:
+                logger.warning("OpenAI tool_call '%s' has malformed arguments: %s", name, exc)
+                parsed.append(ParsedToolCall(
+                    id=call_id, name=name, args={},
+                    error=True, error_message=f"malformed arguments JSON: {exc}",
+                ))
+                continue
 
         if not isinstance(args, dict):
             logger.warning("OpenAI tool_call '%s' arguments not a dict: %s", name, type(args))
@@ -297,8 +301,8 @@ def _extract_tool_calls(message: dict[str, Any]) -> list[ParsedToolCall]:
 
 async def _emit_openai_response(raw: dict[str, Any], tool_queue: Any | None) -> BackendResponse:
     choice = raw["choices"][0]
-    message = choice["message"]
-    content = message.get("content") or ""
+    message = choice.get("message") or {"content": choice.get("text", "")}
+    content = _normalise_content(message.get("content"))
     finish_reason = choice.get("finish_reason", "")
     tool_calls = _extract_tool_calls(message)
     if tool_queue is not None:
@@ -342,6 +346,22 @@ def _tool_chunks_to_calls(tool_chunks: dict[int, dict[str, str]]) -> list[Parsed
             continue
         parsed.append(ParsedToolCall(id=call_id, name=name, args=args, error=False))
     return parsed
+
+
+def _normalise_content(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                parts.append(str(block.get("text", block.get("content", ""))))
+            else:
+                parts.append(str(block))
+        return "".join(parts)
+    return str(content)
 
 
 def _convert_tools_to_openai(anthropic_tools: list[dict[str, Any]]) -> list[dict[str, Any]]:

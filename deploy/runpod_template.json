@@ -1,0 +1,37 @@
+{
+  "name": "batch-agent-vllm-a100-80gb",
+  "imageName": "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
+  "isServerless": false,
+  "gpuTypeIds": [
+    "NVIDIA A100 80GB PCIe"
+  ],
+  "gpuCount": 1,
+  "containerDiskInGb": 120,
+  "volumeInGb": 120,
+  "volumeMountPath": "/workspace",
+  "ports": "8000/http",
+  "env": [
+    {
+      "key": "MODEL_ID",
+      "value": "meta-llama/Llama-3.1-70B-Instruct"
+    },
+    {
+      "key": "PORT",
+      "value": "8000"
+    },
+    {
+      "key": "GPU_MEMORY_UTILIZATION",
+      "value": "0.85"
+    },
+    {
+      "key": "VLLM_VERSION",
+      "value": "0.6.6"
+    },
+    {
+      "key": "BATCH_AGENT_REPO",
+      "value": "/workspace/parallel-agents"
+    }
+  ],
+  "startScript": "set -euo pipefail; if [ ! -d /workspace/parallel-agents ]; then git clone https://github.com/your-org/parallel-agents.git /workspace/parallel-agents; fi; bash /workspace/parallel-agents/deploy/vllm_server.sh",
+  "readme": "Starts vLLM on one A100 80GB with prefix caching enabled and Batch Agent patch helpers importable. Exposes OpenAI-compatible API on port 8000."
+}

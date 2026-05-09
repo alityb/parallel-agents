@@ -92,6 +92,7 @@ class BedrockBackend(BackendAdapter):
         self.model_id_override = model_id_override
         self._client_factory = _client_factory  # if None, uses boto3 default chain
         self.request_metrics: list[dict[str, Any]] = []
+        self.request_payloads: list[dict[str, Any]] = []
 
     @classmethod
     def from_url(cls, url: str) -> "BedrockBackend":
@@ -174,6 +175,7 @@ class BedrockBackend(BackendAdapter):
 
         # Inference configuration
         payload["inferenceConfig"] = {"maxTokens": 4096}
+        self.request_payloads.append(payload)
 
         # Try streaming first; fall back to non-streaming on error
         try:
@@ -242,6 +244,7 @@ class BedrockBackend(BackendAdapter):
             return self._client_factory()
         try:
             import boto3
+            from botocore.config import Config
         except ImportError as exc:
             raise RuntimeError(
                 "boto3 is required for the Bedrock backend: pip install boto3"
@@ -249,6 +252,11 @@ class BedrockBackend(BackendAdapter):
         kwargs: dict[str, Any] = {}
         if self.region:
             kwargs["region_name"] = self.region
+        kwargs["config"] = Config(
+            retries={"max_attempts": 10, "mode": "adaptive"},
+            read_timeout=120,
+            connect_timeout=10,
+        )
         return boto3.client("bedrock-runtime", **kwargs)
 
 
@@ -266,6 +274,7 @@ def _sync_stream(
     client: Any, payload: dict[str, Any]
 ) -> tuple[str, list[ParsedToolCall], str, dict[str, Any]]:
     """Run converse_stream and collect the full response."""
+    started = time.monotonic()
     response = client.converse_stream(**payload)
     stream = response.get("stream", [])
 
@@ -273,7 +282,6 @@ def _sync_stream(
     tool_blocks: dict[int, dict[str, Any]] = {}   # block index → accumulator
     stop_reason = "end_turn"
     last_event: dict[str, Any] = {}
-    started = time.monotonic()
     ttft_seconds: float | None = None
     usage: dict[str, Any] = {}
     metrics: dict[str, Any] = {}

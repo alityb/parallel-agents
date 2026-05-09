@@ -11,8 +11,9 @@ from pydantic import BaseModel
 
 from batch_agent.backends.bedrock import BedrockBackend
 from batch_agent.compiler import TaskCompiler
+from batch_agent.repair import parse_and_validate_output
 from batch_agent.scheduler import WaveScheduler
-from batch_agent.spec import BatchSpec
+from batch_agent.spec import AgentResult, BatchSpec
 
 
 MODEL = os.getenv("BEDROCK_LIVE_MODEL", "anthropic.claude-3-5-sonnet-20241022-v2:0")
@@ -32,27 +33,76 @@ def _usage_cost_usd(usage: dict) -> float | None:
 
 async def main() -> None:
     backend = BedrockBackend(region=REGION)
+    pad_tokens = int(os.getenv("BEDROCK_CACHE_PAD_TOKENS", "0"))
+    system_prompt = ""
+    if pad_tokens:
+        # Approx 1 token per short word for this diagnostic prompt.
+        system_prompt = " ".join(["cacheable-prefix-token"] * pad_tokens)
     spec = BatchSpec(
+        system_prompt=system_prompt,
         task="Return JSON with keys n (random 1-100) and msg (one sentence about that number). Input: {index}",
         inputs=[{"index": i} for i in range(20)],
         output_schema=NumberMessage,
         model=MODEL,
         backend=f"bedrock://{REGION}/{MODEL}",
-        max_concurrent=5,
+        # Bedrock Opus profiles have low default TPS quotas; default to sequential
+        # requests for reproducible live measurements without throttling.
+        max_concurrent=int(os.getenv("BEDROCK_LIVE_MAX_CONCURRENT", "1")),
         max_turns=1,
-        max_retries=1,
-        timeout_per_agent=60,
-        timeout_per_turn=60,
+        max_retries=int(os.getenv("BEDROCK_LIVE_MAX_RETRIES", "3")),
+        timeout_per_agent=float(os.getenv("BEDROCK_LIVE_TIMEOUT", "180")),
+        timeout_per_turn=float(os.getenv("BEDROCK_LIVE_TIMEOUT", "180")),
     )
     scheduler = WaveScheduler(TaskCompiler().compile(spec), backend)
     started = time.monotonic()
     results = []
     async for result in scheduler.stream():
         elapsed = time.monotonic() - started
-        print(f"[{elapsed:6.2f}s] {result.job_id} ok={result.ok} output={result.output}")
+        if result.ok:
+            print(f"[{elapsed:6.2f}s] {result.job_id} ok=True output={result.output}")
+        else:
+            print(f"[{elapsed:6.2f}s] {result.job_id} ok=False error={result.error}")
         results.append(result)
 
+    # Optional diagnostic: direct raw calls for failed inputs, so we can print raw
+    # model responses for parse/schema failures rather than only scheduler errors.
+    raw_failure_samples = []
+    failed_indices = [r.index for r in results if not r.ok][:3]
+    for idx in failed_indices:
+        job = TaskCompiler().compile(BatchSpec(
+            task=spec.task,
+            inputs=[{"index": idx}],
+            output_schema=NumberMessage,
+            model=MODEL,
+            backend=spec.backend,
+            max_concurrent=1,
+            max_turns=1,
+        )).jobs[0]
+        try:
+            response = await backend.generate(
+                shared=TaskCompiler().compile(spec).shared,
+                job=job,
+                model=MODEL,
+                timeout=spec.timeout_per_turn,
+            )
+            parsed = parse_and_validate_output(response.content, NumberMessage)
+            raw_failure_samples.append({
+                "index": idx,
+                "raw_response": response.content,
+                "parse_status": "ok_on_diagnostic_rerun",
+                "parsed": parsed.model_dump(),
+            })
+        except Exception as exc:
+            raw_failure_samples.append({
+                "index": idx,
+                "raw_response": locals().get("response").content if "response" in locals() else None,
+                "parse_status": "failed_on_diagnostic_rerun",
+                "error_type": exc.__class__.__name__,
+                "error": str(exc),
+            })
+
     metrics = backend.request_metrics
+    first_payload = backend.request_payloads[0] if backend.request_payloads else {}
     ttfts = [m.get("ttft_seconds") for m in metrics if m.get("ttft_seconds") is not None]
     usages = [m.get("usage", {}) for m in metrics]
     costs = [_usage_cost_usd(u) for u in usages]
@@ -70,6 +120,16 @@ async def main() -> None:
         "ttft_p50_seconds": statistics.median(ttfts) if ttfts else None,
         "ttft_p95_seconds": sorted(ttfts)[int(len(ttfts) * 0.95) - 1] if ttfts else None,
         "usage": usages,
+        "failures": [
+            {
+                "job_id": r.job_id,
+                "index": r.index,
+                "error_type": None if r.error is None else r.error.type,
+                "error": None if r.error is None else r.error.message,
+            }
+            for r in results if not r.ok
+        ],
+        "raw_failure_samples": raw_failure_samples,
         "total_input_tokens": sum(u.get("inputTokens", 0) for u in usages),
         "total_output_tokens": sum(u.get("outputTokens", 0) for u in usages),
         "total_cache_read_input_tokens": sum(u.get("cacheReadInputTokens", 0) for u in usages),
@@ -77,6 +137,9 @@ async def main() -> None:
         "cache_usage_keys": cache_usage_keys,
         "cachePoint_requested": cache_point_requested,
         "cachePoint_tokens_visible": bool(cache_usage_keys),
+        "system_prompt_char_count": len(system_prompt),
+        "system_prompt_estimated_tokens": max(0, len(system_prompt.split())),
+        "request_body_sample": first_payload,
         "estimated_cost_usd": sum(costs) if costs else None,
         "cost_source": "Bedrock response usage fields include tokens but no dollar cost; exact USD requires AWS Pricing/CUR.",
     }

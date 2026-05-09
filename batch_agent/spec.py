@@ -73,6 +73,8 @@ class BatchSpec:
     reduce_schema: Any | None = None
     # Drift 4: model-based compaction backend URL (None → heuristic fallback)
     compaction_backend_url: str | None = None
+    distributed: bool = False
+    node_id: str = "node-0"
 
     def __post_init__(self) -> None:
         if not self.task:

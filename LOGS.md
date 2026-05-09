@@ -209,3 +209,14 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Synthetic compression result: full blocks `16000`, stored unique blocks `853`, compression ratio `18.76x`.
 - 2.7x capacity interpretation: if stock prefix caching fits 100 concurrent agents in a fixed KV budget, the TokenDance target implies roughly 270 agents at the same memory budget; at N=500, equivalent memory pressure would drop toward ~185 stock-agent equivalents, subject to allocator fragmentation and non-KV overhead.
 - Full pytest suite after TokenDance prototype: 54 passed.
+
+### Phase 4 distributed state store primitives — 2026-05-09
+
+- Added `distributed` and `node_id` fields to `BatchSpec` for Phase 4 wiring.
+- Added `version` and `owner_node_id` to `AgentState` for optimistic locking and job ownership.
+- Added `RedisStreamsStateStore` to `state.py`, written against a minimal Redis client protocol so it can run against real Redis or an in-process mock.
+- Implemented lease acquisition with Redis-style `SET NX EX`: one node wins ownership; others back off until TTL expiry.
+- Implemented lease renewal/release and optimistic `save_with_version()`. Stale writes are rejected when the expected version does not match the stored state.
+- Added stream append (`xadd`) on successful writes to model Redis Streams append-only state history.
+- Added `tests/integration/test_distributed.py`: two nodes share a mock Redis, exactly one wins lease, stale write is rejected, and another node can acquire after TTL expiry.
+- Full pytest suite after distributed state primitives: 55 passed.

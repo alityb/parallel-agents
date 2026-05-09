@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -37,6 +38,8 @@ class AgentState:
     predicted_tool_sequence: list[str] | None = None # tool names from checkpoint history
     historical_turn_latencies: list[float] = field(default_factory=list)  # per-turn generate() durations (seconds)
     tool_wait_durations: list[float] = field(default_factory=list)        # per TOOL_WAIT durations (seconds)
+    version: int = 0                                                       # optimistic-lock version
+    owner_node_id: str | None = None                                      # distributed lease owner
 
     def set_status(self, status: AgentStatus) -> None:
         self.status = status
@@ -88,3 +91,100 @@ class InMemoryStateStore:
 
     def all_in_status(self, status: AgentStatus) -> list[AgentState]:
         return [s for s in self._states.values() if s.status == status]
+
+
+class RedisStreamsStateStore:
+    """Redis-style distributed state store with leases and optimistic locking.
+
+    This class is written against a minimal Redis client protocol (`get`, `set`,
+    `delete`, `xadd`) so it can be tested with an in-process mock Redis. With a
+    real Redis client, use redis-py methods with compatible parameters.
+    """
+
+    def __init__(self, redis_client: object, *, node_id: str) -> None:
+        self.redis = redis_client
+        self.node_id = node_id
+
+    def acquire_lease(self, job_id: str, ttl_seconds: float) -> bool:
+        key = self._lease_key(job_id)
+        # Redis SET key value NX EX ttl
+        return bool(self.redis.set(key, self.node_id, nx=True, ex=ttl_seconds))
+
+    def renew_lease(self, job_id: str, ttl_seconds: float) -> bool:
+        key = self._lease_key(job_id)
+        owner = self.redis.get(key)
+        if owner != self.node_id:
+            return False
+        self.redis.set(key, self.node_id, ex=ttl_seconds)
+        return True
+
+    def release_lease(self, job_id: str) -> None:
+        key = self._lease_key(job_id)
+        if self.redis.get(key) == self.node_id:
+            self.redis.delete(key)
+
+    def load(self, job_id: str) -> AgentState | None:
+        raw = self.redis.get(self._state_key(job_id))
+        if raw is None:
+            return None
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+        return _state_from_json(raw)
+
+    def save_with_version(self, state: AgentState, expected_version: int) -> bool:
+        current = self.load(state.job_id)
+        if current is not None and current.version != expected_version:
+            return False
+        state.version = expected_version + 1
+        state.owner_node_id = self.node_id
+        self.redis.set(self._state_key(state.job_id), _state_to_json(state))
+        if hasattr(self.redis, "xadd"):
+            self.redis.xadd("agent_state_stream", {"job_id": state.job_id, "version": state.version})
+        return True
+
+    def _state_key(self, job_id: str) -> str:
+        return f"agent:{job_id}:state"
+
+    def _lease_key(self, job_id: str) -> str:
+        return f"agent:{job_id}:lease"
+
+
+def _state_to_json(state: AgentState) -> str:
+    return json.dumps({
+        "job_id": state.job_id,
+        "status": state.status.value,
+        "turn": state.turn,
+        "messages": [{"role": m.role, "content": m.content} for m in state.messages],
+        "kv_key": state.kv_key,
+        "retry_count": state.retry_count,
+        "created_at": state.created_at,
+        "last_updated": state.last_updated,
+        "estimated_next_activation": state.estimated_next_activation,
+        "steps_to_execution": state.steps_to_execution,
+        "predicted_tool_sequence": state.predicted_tool_sequence,
+        "historical_turn_latencies": state.historical_turn_latencies,
+        "tool_wait_durations": state.tool_wait_durations,
+        "version": state.version,
+        "owner_node_id": state.owner_node_id,
+    })
+
+
+def _state_from_json(raw: str) -> AgentState:
+    data = json.loads(raw)
+    return AgentState(
+        job_id=data["job_id"],
+        status=AgentStatus(data["status"]),
+        turn=data.get("turn", 0),
+        messages=[Message(role=m["role"], content=m["content"]) for m in data.get("messages", [])],
+        kv_key=data.get("kv_key"),
+        retry_count=data.get("retry_count", 0),
+        created_at=data.get("created_at", time.time()),
+        last_updated=data.get("last_updated", time.time()),
+        estimated_next_activation=data.get("estimated_next_activation"),
+        steps_to_execution=data.get("steps_to_execution"),
+        predicted_tool_sequence=data.get("predicted_tool_sequence"),
+        historical_turn_latencies=data.get("historical_turn_latencies", []),
+        tool_wait_durations=data.get("tool_wait_durations", []),
+        version=data.get("version", 0),
+        owner_node_id=data.get("owner_node_id"),
+    )

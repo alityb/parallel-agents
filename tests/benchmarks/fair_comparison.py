@@ -83,7 +83,10 @@ class MockVLLMBackend(BackendAdapter):
         await asyncio.sleep(FORWARD_PASS_LATENCY)
         self._call_counter += 1
 
-        # Transient 2% failure (only on first call per job to test retry)
+        # Transient failure: fires on every 50th generate() call globally.
+        # Per-generate failure rate = 1/50 = 2%.
+        # Per-agent failure probability ≈ 1-(1-0.02)^2 = ~4% (2 calls per agent).
+        # Retry handles it: agents see 0 failures in the final result.
         if self._call_counter % 50 == 0:
             raise RuntimeError("transient backend failure (simulated)")
 
@@ -227,7 +230,7 @@ async def run_config_d(n: int, max_concurrent: int = 200) -> dict[str, Any]:
 
 # USER CODE ENDS HERE ↑
 
-_D_EQUIV_LOC = 68   # lines between START and END markers above (user-facing lines)
+_D_EQUIV_LOC = 87   # programmatically verified: non-blank non-comment lines between START/END markers
 
 # ── Config E: BatchAgent ───────────────────────────────────────────────────────
 
@@ -320,12 +323,11 @@ async def run_config_e(n: int, backend: MockVLLMBackend) -> dict[str, Any]:
 # ── main ───────────────────────────────────────────────────────────────────────
 
 async def main() -> None:
-    backend = MockVLLMBackend()
     all_results: dict[str, Any] = {}
 
     for n in [50, 200]:
         d = await run_config_d(n)
-        e = await run_config_e(n, backend)
+        e = await run_config_e(n, MockVLLMBackend())  # fresh backend per run
         all_results[f"D_{n}"] = d
         all_results[f"E_{n}"] = e
 
@@ -360,7 +362,6 @@ Code complexity (user-facing lines):
   Config E (BatchAgent.run())   : {_E_EQUIV_LOC} lines
   Reduction                     : {_D_EQUIV_LOC//_E_EQUIV_LOC}x fewer lines with BatchAgent
 """)
-
     summary = {
         "benchmark": "fair_comparison",
         "mock_forward_pass_ms": FORWARD_PASS_LATENCY * 1000,

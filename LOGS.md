@@ -399,7 +399,7 @@ Using `cacheable=False` ensures the LRU is bypassed. Dedup operates via `_inflig
 
 - **E N=200: 3.48s under the 10s target** (vs 36.5s before = 10.5× speedup on mock).
 - **Tool dedup: 200→4 reads (50× ratio)** via `_inflight` Future coalescing (not LRU).
-- **Code complexity**: D-equiv = 68 lines of user-facing multi-turn/retry/validation; BatchAgent.run() = 9 lines. **7.6× reduction**.
+- **Code complexity**: D-equiv = **87 lines** (programmatically verified by stress test) of user-facing multi-turn/retry/validation; BatchAgent.run() = 9 lines. **9.7× reduction** (previously stated as 7.6× from a hardcoded, wrong count).
 
 #### Live GPU results (A10G, Qwen2.5-7B, second instance 3.81.49.72)
 
@@ -419,7 +419,7 @@ Note: D-naive on GPU embeds file content in prompt (1 forward pass). E does true
 
 #### Honest benchmark conclusions
 
-1. Code complexity: BatchAgent always wins — 7.6× fewer lines for same work.
+1. Code complexity: BatchAgent always wins — **9.7× fewer lines** for same work (87 vs 9, programmatically verified). Previously stated as 7.6× from a hardcoded wrong count.
 2. Tool dedup: only visible for slow tools (≥50ms) where multiple agents arrive within the execution window. File reads are too fast to benefit on real hardware.
 3. Wall-clock: BatchAgent is slower per-agent on both mock and GPU because it does more per agent (retry, validation, KVFlow, state tracking). The benefit is correctness, dedup, and developer time, not raw throughput for simple tasks.
 4. At N=200 on GPU the backpressure fix delivered a **40% wall-clock improvement** (36.5s → 21.8s). The remaining gap to 10s requires a larger GPU or more concurrency.

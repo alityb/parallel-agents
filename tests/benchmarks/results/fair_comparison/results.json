@@ -11,10 +11,10 @@
       "mode": "naive_multi_turn",
       "n": 200,
       "ok": 200,
-      "throughput_agents_per_sec": 303.1621900530385,
+      "throughput_agents_per_sec": 300.9567792625732,
       "tool_dedup_ratio": null,
       "tool_reads_executed": 204,
-      "wall_clock_seconds": 0.6597128750290722
+      "wall_clock_seconds": 0.6645472499076277
     },
     "D_50": {
       "config": "D-equiv-50",
@@ -24,10 +24,10 @@
       "mode": "naive_multi_turn",
       "n": 50,
       "ok": 50,
-      "throughput_agents_per_sec": 76.90084960275851,
+      "throughput_agents_per_sec": 76.76334032851018,
       "tool_dedup_ratio": null,
       "tool_reads_executed": 51,
-      "wall_clock_seconds": 0.6501878751441836
+      "wall_clock_seconds": 0.6513525829650462
     },
     "E_200": {
       "config": "E-sdk-200",
@@ -37,11 +37,11 @@
       "mode": "batchagent_sdk",
       "n": 200,
       "ok": 200,
-      "throughput_agents_per_sec": 57.42940319924909,
+      "throughput_agents_per_sec": 57.53350899614132,
       "tool_dedup_ratio": 50.0,
       "tool_reads_executed": 4,
       "tool_reads_requested": 200,
-      "wall_clock_seconds": 3.4825366251170635
+      "wall_clock_seconds": 3.4762350409291685
     },
     "E_50": {
       "config": "E-sdk-50",
@@ -51,23 +51,23 @@
       "mode": "batchagent_sdk",
       "n": 50,
       "ok": 50,
-      "throughput_agents_per_sec": 14.464909368441884,
+      "throughput_agents_per_sec": 14.444406903423436,
       "tool_dedup_ratio": 25.0,
       "tool_reads_executed": 2,
       "tool_reads_requested": 50,
-      "wall_clock_seconds": 3.456641084048897
+      "wall_clock_seconds": 3.4615474580787122
     }
   },
   "summary": {
     "d200_failure_rate_pct": 0.0,
     "e200_failure_rate_pct": 0.0,
     "e200_under_10s": true,
-    "e200_wall_seconds": 3.4825366251170635,
-    "loc_d_equiv": 68,
+    "e200_wall_seconds": 3.4762350409291685,
+    "loc_d_equiv": 87,
     "loc_e_sdk": 9,
-    "loc_reduction_ratio": 7.555555555555555,
+    "loc_reduction_ratio": 9.666666666666666,
     "tool_dedup_ratio_e200": 50.0,
-    "wall_ratio_E_vs_D_n200": 5.278867151052032,
-    "wall_ratio_E_vs_D_n50": 5.316372722703208
+    "wall_ratio_E_vs_D_n200": 5.23098250938871,
+    "wall_ratio_E_vs_D_n50": 5.31439891175571
   }
 }

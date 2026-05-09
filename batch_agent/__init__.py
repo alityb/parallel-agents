@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 from .backends import BackendAdapter, backend_from_url
@@ -92,11 +93,137 @@ class BatchAgent:
         return results, reduce_results[0].output
 
     @classmethod
+    async def run_with_map_reduce(
+        cls,
+        *,
+        plan_prompt: str,
+        plan_inputs: dict[str, Any] | None = None,
+        plan_output_schema: Any,
+        planner_model: str | None = None,
+        task: str,
+        output_schema: Any,
+        worker_model: str | None = None,
+        reduce: str,
+        reduce_schema: Any,
+        reducer_model: str | None = None,
+        tools: list[Any] | tuple[Any, ...] = (),
+        model: str,
+        backend: str,
+        max_concurrent: int = 64,
+        max_turns: int = 6,
+        on_result: Any | None = None,
+        checkpoint_dir: str | None = None,
+        **kwargs: Any,
+    ) -> tuple[list[AgentResult], Any]:
+        """Run a three-tier plan → map → reduce agent topology."""
+        plan_inputs = plan_inputs or {}
+        stage_checkpoint = _stage_checkpoint_factory(checkpoint_dir)
+
+        planner_results = await cls.run(
+            task=plan_prompt,
+            inputs=[plan_inputs],
+            tools=tools,
+            output_schema=plan_output_schema,
+            model=planner_model or model,
+            backend=backend,
+            max_concurrent=1,
+            max_turns=max_turns,
+            checkpoint_dir=stage_checkpoint("plan"),
+            **kwargs,
+        )
+        if not planner_results or not planner_results[0].ok:
+            error = planner_results[0].error if planner_results else None
+            raise RuntimeError(f"Planner agent failed: {error}")
+
+        planner_output = planner_results[0].output
+        items = _extract_plan_items(planner_output)
+        map_inputs = [{"item": item, "index": index} for index, item in enumerate(items)]
+
+        map_results = await cls.run(
+            task=task,
+            inputs=map_inputs,
+            tools=tools,
+            output_schema=output_schema,
+            model=worker_model or model,
+            backend=backend,
+            max_concurrent=max_concurrent,
+            max_turns=max_turns,
+            on_result=on_result,
+            checkpoint_dir=stage_checkpoint("map"),
+            **kwargs,
+        )
+
+        reduce_payload = []
+        for result in map_results:
+            if result.ok:
+                reduce_payload.append({
+                    "status": "ok",
+                    "index": result.index,
+                    "item": items[result.index] if result.index < len(items) else None,
+                    "output": to_jsonable(result.output),
+                })
+            else:
+                reduce_payload.append({
+                    "status": "error",
+                    "index": result.index,
+                    "item": items[result.index] if result.index < len(items) else None,
+                    "error": {
+                        "type": result.error.type if result.error else "Unknown",
+                        "message": result.error.message if result.error else "unknown error",
+                    },
+                })
+
+        reduce_text = reduce.format(n=len(map_results))
+        reduce_prompt = (
+            f"{reduce_text}\n\n"
+            f"Planner output:\n{json.dumps(to_jsonable(planner_output), default=str, ensure_ascii=False)}\n\n"
+            f"Results:\n{json.dumps(reduce_payload, default=str, ensure_ascii=False)}"
+        )
+        reduce_results = await cls.run(
+            task="{reduce_prompt}",
+            inputs=[{"reduce_prompt": reduce_prompt}],
+            tools=tools,
+            output_schema=reduce_schema,
+            model=reducer_model or model,
+            backend=backend,
+            max_concurrent=1,
+            max_turns=max_turns,
+            checkpoint_dir=stage_checkpoint("reduce"),
+            no_hoist=True,
+            **kwargs,
+        )
+        if not reduce_results or not reduce_results[0].ok:
+            error = reduce_results[0].error if reduce_results else None
+            raise RuntimeError(f"Reduce agent failed: {error}")
+
+        return map_results, reduce_results[0].output
+
+    @classmethod
     def _scheduler(
         cls, spec: BatchSpec, backend: BackendAdapter | None = None
     ) -> WaveScheduler:
         plan = TaskCompiler().compile(spec)
         return WaveScheduler(plan, backend or backend_from_url(spec.backend))
+
+
+def _stage_checkpoint_factory(checkpoint_dir: str | None):
+    def stage(name: str) -> str | None:
+        if checkpoint_dir is None:
+            return None
+        return str(Path(checkpoint_dir) / name)
+
+    return stage
+
+
+def _extract_plan_items(planner_output: Any) -> list[str]:
+    raw_items = None
+    if hasattr(planner_output, "items") and not callable(getattr(planner_output, "items")):
+        raw_items = getattr(planner_output, "items")
+    elif isinstance(planner_output, dict):
+        raw_items = planner_output.get("items")
+    if not isinstance(raw_items, list):
+        raise ValueError("plan_output_schema output must contain an items: list[str] field")
+    return [str(item) for item in raw_items]
 
 
 __all__ = ["AgentResult", "BatchAgent", "BatchSpec", "Tool"]

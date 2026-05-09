@@ -29,6 +29,15 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Backend capabilities now include `nvext_agent_hints`; Dynamo reports `True`, vLLM/SGLang/Anthropic/Bedrock report `False`.
 - Tests added: unit coverage for hint construction, payload attach/absence, and integration coverage for a mock Dynamo SSE server validating `nvext` presence and parsing `tool_call_dispatch`.
 
+### Three-tier run_with_map_reduce — 2026-05-09
+
+- Added `BatchAgent.run_with_map_reduce()` implementing plan → map → reduce with three sequential `BatchAgent.run()` stages.
+- Planner output must contain `items: list[str]`; map inputs receive `{"item": item, "index": index}`; reduce receives planner output plus all map results, including structured error entries for failed map agents.
+- Per-stage models are supported via `planner_model`, `worker_model`, and `reducer_model`; shared settings reuse tools, backend, max turns, and BatchSpec kwargs. `on_result` fires only for map-stage completions.
+- `checkpoint_dir` is split into `plan/`, `map/`, and `reduce/` subdirectories so planner output can be reused without colliding with map job IDs.
+- Added a lightweight `TaskCompiler.build_dag("map_reduce")` descriptor for the three-stage topology.
+- Tests added: planner item dispatch, map input construction, reduce payload content, partial map failure propagation, checkpoint stage splitting, DAG descriptor, and an end-to-end mock backend verifying stage sequencing plus `on_result`.
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

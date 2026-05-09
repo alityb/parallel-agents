@@ -31,6 +31,22 @@ class TaskCompiler:
             spec=spec,
         )
 
+    def build_dag(self, topology: str = "flat") -> dict[str, Any]:
+        """Return a lightweight stage DAG descriptor for orchestration topologies."""
+        if topology == "map_reduce":
+            return {
+                "topology": "map_reduce",
+                "stages": ["plan", "map", "reduce"],
+                "edges": [("plan", "map"), ("map", "reduce")],
+            }
+        if topology == "reduce":
+            return {
+                "topology": "reduce",
+                "stages": ["map", "reduce"],
+                "edges": [("map", "reduce")],
+            }
+        return {"topology": "flat", "stages": ["map"], "edges": []}
+
     def _build_job(self, spec: BatchSpec, index: int, input_data: dict[str, Any], prefix: str) -> AgentJob:
         try:
             prompt = spec.task.format(**input_data)

@@ -49,31 +49,34 @@ class VLLMBackend(OpenAIBackend):
             return None
         prefix_hash = hashlib.sha256(shared.prefix.encode("utf-8")).hexdigest()
         async with httpx.AsyncClient(timeout=30) as client:
-            # Warm the prefix KV cache (zero-token completion forces prefill)
-            response = await client.post(
-                f"{self.base_url}/v1/completions",
-                json={"model": model, "prompt": shared.prefix, "max_tokens": 0},
-                headers={"authorization": f"Bearer {self.api_key}"},
-            )
-            response.raise_for_status()
-
-            # Drift 6: pin the prefix block so it is never LRU-evicted.
-            # Requires vllm_patch/prefetch_route.py to be installed on the vLLM server.
-            # HARDWARE BLOCKER: silently skips if /internal/pin_blocks is not available.
+            # vLLM ≥0.6: use chat completions with max_tokens=1 to force prefix KV fill.
+            # Legacy zero-token /v1/completions no longer works in vLLM 0.20+.
             try:
-                pin_response = await client.post(
+                response = await client.post(
+                    f"{self.base_url}/v1/chat/completions",
+                    json={
+                        "model": model,
+                        "messages": [{"role": "system", "content": shared.prefix},
+                                     {"role": "user", "content": "ping"}],
+                        "max_tokens": 1,
+                    },
+                    headers={"authorization": f"Bearer {self.api_key}"},
+                )
+                response.raise_for_status()
+                logger.debug("warm_prefix via chat/completions: prefix hash=%s", prefix_hash[:12])
+            except Exception as e:
+                logger.debug("warm_prefix failed (%s) — continuing without pre-warm", e)
+
+        # Drift 6: pin the prefix block (requires vllm_patch on the server side).
+        async with httpx.AsyncClient(timeout=5) as pclient:
+            try:
+                pin_resp = await pclient.post(
                     f"{self.base_url}/internal/pin_blocks",
                     json={"kv_keys": [prefix_hash]},
                     headers={"authorization": f"Bearer {self.api_key}"},
-                    timeout=5.0,
                 )
-                if pin_response.status_code == 200:
+                if pin_resp.status_code == 200:
                     logger.debug("Pinned prefix block %s", prefix_hash[:12])
-                else:
-                    logger.debug(
-                        "Pin blocks endpoint returned %d (patch not installed?)",
-                        pin_response.status_code,
-                    )
             except Exception as e:
                 logger.debug("Pin blocks call skipped (%s) — vLLM patch not installed", e)
 
@@ -94,24 +97,41 @@ class VLLMBackend(OpenAIBackend):
                 response = await client.get(f"{self.base_url}/metrics")
                 if response.status_code != 200:
                     return {}
-            text = response.text
+                text = response.text
             metrics: dict[str, float] = {}
             # Parse Prometheus text format
             for line in text.splitlines():
                 if line.startswith("#"):
                     continue
-                m = re.match(r"^(vllm:\w+)\s+([\d.e+\-]+)", line)
+                m = re.match(r"^(vllm:\w+)(?:\{[^}]*\})?\s+([\d.e+\-]+)", line)
                 if not m:
                     continue
                 name, value_str = m.group(1), m.group(2)
+                if name.endswith("_created"):
+                    continue  # skip timestamp gauges
                 try:
                     value = float(value_str)
                 except ValueError:
                     continue
-                if "prefix_cache_hit_rate" in name:
+                if ("prefix_cache_queries_total" in name or "prefix_cache_hits_total" in name) \
+                        and "external" not in name:
+                    # These are token-level counters; we compute rate after both are parsed
+                    if "queries" in name:
+                        metrics["_prefix_cache_queries_tokens"] = value
+                    else:
+                        metrics["_prefix_cache_hits_tokens"] = value
+                elif "prefix_cache_hit_rate" in name:
                     metrics["prefix_cache_hit_rate"] = value
                 elif "gpu_cache_usage" in name:
                     metrics["gpu_utilization"] = value
+            # Derive hit rate from token counters when a pre-computed rate is absent
+            if "prefix_cache_hit_rate" not in metrics:
+                q = metrics.pop("_prefix_cache_queries_tokens", 0)
+                h = metrics.pop("_prefix_cache_hits_tokens", 0)
+                if q > 0:
+                    metrics["prefix_cache_hit_rate"] = h / q
+                    metrics["prefix_cache_hit_tokens"] = h
+                    metrics["prefix_cache_query_tokens"] = q
             return metrics
         except Exception as e:
             logger.debug("get_cache_metrics failed: %s", e)

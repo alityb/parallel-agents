@@ -628,6 +628,30 @@ Semaphore wraps only inference calls. Agents in `TOOL_WAIT` release their slot. 
 
 ---
 
+### W15: Session-variant headers poison the prefix cache *(new)*
+
+**Problem:** If agents run via `Tool.claude_code`, Claude Code's session-specific billing header appears at token zero of each agent's prompt. This makes every agent's prefix unique, defeating prefix caching entirely.
+
+**Mitigation:** Add a `strip_preamble_headers` option to the vLLM adapter that removes known session-variant headers before tokenization. Default it on when `Tool.claude_code` is in the tool list.
+
+---
+
+### W16: Streaming tool dispatch is not implemented *(new)*
+
+**Problem:** Tools are executed only after the full model response is received. NVIDIA Dynamo's `--enable-streaming-tool-dispatch` shows that tool calls can be dispatched as soon as they are parsed from the stream, allowing tool execution and continued token generation to proceed in parallel.
+
+**Mitigation:** Implement streaming tool-call parsing and dispatch in the vLLM adapter. This would reduce `TOOL_WAIT` time without requiring orchestration changes.
+
+---
+
+### W17: Message compaction may break reasoning-tool-call pairing *(new)*
+
+**Problem:** When compaction summarizes old turns, it may separate reasoning blocks from the tool calls they explain. Models that use interleaved reasoning before tool calls depend on that pairing being preserved in context.
+
+**Mitigation:** Preserve reasoning-tool-call pairs as atomic units during compaction rather than summarizing them independently.
+
+---
+
 ## 7. File Structure
 
 ```

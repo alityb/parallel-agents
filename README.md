@@ -138,8 +138,11 @@ Cost comparison for N=100, input=3000 tokens, output=500 tokens, model=sonnet-4.
 | Anthropic Batch API | $0.8250 | 0.500x | No tool calls, single turn only. |
 | BatchAgent + API caching | $0.8659 | 0.525x | Uses measured 96.8% cache hit rate. |
 | BatchAgent + self-hosted vLLM | $0.0041 | 0.002x | L4 at $0.805/hr, 19800 agents/hr. |
+| BatchAgent + NVIDIA Dynamo | $0.0041 | 0.002x | Same L4 cost model as vLLM; nvext_agent_hints benefit is scheduling, not pricing. |
 
 Batch API cost assumes single-turn, no tool calls. BatchAgent supports multi-turn tool calls at the caching price.
+
+AutoResearch 20-question paper cost is not reported yet: the live Step 5 run was blocked by missing Anthropic and search API credentials, so `results.json` records it as blocked rather than estimated.
 
 ---
 

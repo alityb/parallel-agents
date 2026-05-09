@@ -6,8 +6,12 @@ from pathlib import Path
 from typing import Any
 
 
-SONNET_INPUT = 3.00   # per MTok
-SONNET_OUTPUT = 15.00
+# Pricing constants, USD per MTok. Update these when pricing changes.
+MODEL_PRICING = {
+    "haiku-4.5": {"input": 1.00, "output": 5.00},
+    "sonnet-4.6": {"input": 3.00, "output": 15.00},
+    "opus-4.6": {"input": 15.00, "output": 75.00},
+}
 CACHE_READ_MULTIPLIER = 0.10
 BATCH_DISCOUNT = 0.50
 VLLM_GPU_COST_PER_HOUR = 0.805  # L4 on RunPod
@@ -28,22 +32,27 @@ def compute_rows(
     cache_hit_rate: float,
     model: str,
 ) -> dict[str, Any]:
+    if model not in MODEL_PRICING:
+        raise ValueError(f"unknown model {model!r}; choose one of {', '.join(sorted(MODEL_PRICING))}")
+    input_price = MODEL_PRICING[model]["input"]
+    output_price = MODEL_PRICING[model]["output"]
     total_input_mtok = (n * input_tokens) / 1_000_000
     total_output_mtok = (n * output_tokens) / 1_000_000
 
-    naive_cost = total_input_mtok * SONNET_INPUT + total_output_mtok * SONNET_OUTPUT
+    naive_cost = total_input_mtok * input_price + total_output_mtok * output_price
     batch_cost = naive_cost * BATCH_DISCOUNT
 
     cached_input_mtok = total_input_mtok * cache_hit_rate
     uncached_input_mtok = total_input_mtok - cached_input_mtok
     cached_api_cost = (
-        uncached_input_mtok * SONNET_INPUT
-        + cached_input_mtok * SONNET_INPUT * CACHE_READ_MULTIPLIER
-        + total_output_mtok * SONNET_OUTPUT
+        uncached_input_mtok * input_price
+        + cached_input_mtok * input_price * CACHE_READ_MULTIPLIER
+        + total_output_mtok * output_price
     )
 
     vllm_hours = n / VLLM_AGENTS_PER_HOUR
     vllm_cost = vllm_hours * VLLM_GPU_COST_PER_HOUR
+    dynamo_cost = vllm_cost
 
     rows = [
         {
@@ -70,6 +79,12 @@ def compute_rows(
             "relative_to_naive": vllm_cost / naive_cost,
             "note": f"L4 at ${VLLM_GPU_COST_PER_HOUR:.3f}/hr, {VLLM_AGENTS_PER_HOUR:.0f} agents/hr.",
         },
+        {
+            "name": "BatchAgent + NVIDIA Dynamo",
+            "cost_usd": dynamo_cost,
+            "relative_to_naive": dynamo_cost / naive_cost,
+            "note": "Same L4 cost model as vLLM; nvext_agent_hints benefit is scheduling, not pricing.",
+        },
     ]
 
     return {
@@ -81,12 +96,24 @@ def compute_rows(
             "model": model,
         },
         "pricing": {
-            "sonnet_input_per_mtok": SONNET_INPUT,
-            "sonnet_output_per_mtok": SONNET_OUTPUT,
+            "models": MODEL_PRICING,
+            "selected_input_per_mtok": input_price,
+            "selected_output_per_mtok": output_price,
             "cache_read_multiplier": CACHE_READ_MULTIPLIER,
             "batch_discount": BATCH_DISCOUNT,
             "vllm_gpu_cost_per_hour": VLLM_GPU_COST_PER_HOUR,
             "vllm_agents_per_hour": VLLM_AGENTS_PER_HOUR,
+        },
+        "autoresearch_example": {
+            "status": "blocked",
+            "reason": "Step 5 live AutoResearch run did not execute because ANTHROPIC_API_KEY and search API keys were unavailable.",
+            "planned_run": {
+                "n_questions": 20,
+                "planner": "opus-4.6",
+                "workers": "sonnet-4.6",
+                "reducer": "opus-4.6",
+            },
+            "real_cost_usd": None,
         },
         "rows": rows,
     }
@@ -131,7 +158,7 @@ def main() -> None:
     parser.add_argument("--input-tokens", type=int, default=3000)
     parser.add_argument("--output-tokens", type=int, default=500)
     parser.add_argument("--cache-hit-rate", type=float, default=0.968)
-    parser.add_argument("--model", default="sonnet-4.6")
+    parser.add_argument("--model", default="sonnet-4.6", choices=sorted(MODEL_PRICING))
     parser.add_argument("--latex", action="store_true")
     args = parser.parse_args()
 

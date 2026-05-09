@@ -71,6 +71,22 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Added regression coverage for `_redis_ttl_kwargs(2.0) == {"ex": 2}`, `_redis_ttl_kwargs(2.5) == {"px": 2500}`, and millisecond floor behavior.
 - Local Redis chaos run blocked: no Redis server is listening on `127.0.0.1:6379` and `redis-cli` is not installed in this environment. Mock distributed tests passed; real Redis command remains `python3 deploy/real_redis_chaos.py` after starting localhost Redis.
 
+### Cost comparison v2 update — 2026-05-09
+
+- Updated `tests/benchmarks/cost_comparison.py` to support `--model haiku-4.5`, `--model sonnet-4.6`, and `--model opus-4.6` with pricing constants at the top of the file.
+- Added a fifth row: `BatchAgent + NVIDIA Dynamo`, using the same L4 cost model as vLLM and noting that `nvext_agent_hints` affects scheduling rather than direct price.
+- AutoResearch cost is recorded in `results.json` as `blocked` because Step 5 did not run without Anthropic and search credentials. No estimated cost was substituted for a real run.
+- Ran `python3 tests/benchmarks/cost_comparison.py --model haiku-4.5`, `--model opus-4.6`, and `--model sonnet-4.6`; the final checked-in result uses `sonnet-4.6`.
+- Current output:
+
+| Mode | Cost / batch | Relative | Note |
+|---|---:|---:|---|
+| Naive API | $1.6500 | 1.000x | Parallel API calls, no cache discount. |
+| Anthropic Batch API | $0.8250 | 0.500x | No tool calls, single turn only. |
+| BatchAgent + API caching | $0.8659 | 0.525x | Uses measured 96.8% cache hit rate. |
+| BatchAgent + self-hosted vLLM | $0.0041 | 0.002x | L4 at $0.805/hr, 19800 agents/hr. |
+| BatchAgent + NVIDIA Dynamo | $0.0041 | 0.002x | Same L4 cost model as vLLM; nvext_agent_hints benefit is scheduling, not pricing. |
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

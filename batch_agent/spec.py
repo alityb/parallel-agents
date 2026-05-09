@@ -52,10 +52,23 @@ class BatchSpec:
     system_prompt: str = ""
     tools: Sequence[Any] = field(default_factory=tuple)
     output_schema: Any | None = None
-    # Drift 8: default model string kept current; update here when model is deprecated
     model: str = "claude-sonnet-4-20250514"
     backend: str = "anthropic://"
+    # --- concurrency controls ---
+    # max_concurrent: DEPRECATED — maps to max_inflight for backward compatibility.
     max_concurrent: int = 10
+    # max_inflight: hard cap on simultaneous in-flight HTTP requests to the backend.
+    # -1 means "use max_concurrent if set, else unlimited".
+    max_inflight: int = -1
+    # max_dispatched: how many agent coroutines to create before waiting for completions.
+    # -1 means unlimited (all N jobs are dispatched immediately; backpressure controls flow).
+    max_dispatched: int = -1
+    # calibrate_backend: run a 5-second throughput ramp before the first wave to
+    # automatically choose max_inflight.  Result is cached per backend URL.
+    calibrate_backend: bool = False
+    # backpressure_ceiling: stop dispatching when vLLM reports this many queued requests.
+    # 0 disables backpressure (useful for mock/API backends).
+    backpressure_ceiling: int = 0
     max_turns: int = 1
     max_retries: int = 3
     timeout_per_agent: float | None = 300
@@ -64,14 +77,13 @@ class BatchSpec:
     min_response_tokens: int = 1024
     model_max_context: int = 200_000
     on_result: Callable[[AgentResult], Any] | None = None
-    diff_kv: bool = False                           # Phase 3B feature flag (TokenDance)
-    kvflow: bool = True                             # Phase 3A flag; default True in native mode
-    predictive_prewarm: bool = False                # opt-in: pre-warm tools from checkpoint history
+    diff_kv: bool = False
+    kvflow: bool = True
+    predictive_prewarm: bool = False
     checkpoint_dir: str | Path | None = None
     no_hoist: bool = False
     reduce: str | None = None
     reduce_schema: Any | None = None
-    # Drift 4: model-based compaction backend URL (None → heuristic fallback)
     compaction_backend_url: str | None = None
     distributed: bool = False
     node_id: str = "node-0"
@@ -85,6 +97,13 @@ class BatchSpec:
             raise ValueError("max_turns must be >= 1")
         if self.max_retries < 0:
             raise ValueError("max_retries must be >= 0")
+
+    @property
+    def effective_max_inflight(self) -> int:
+        """Resolved max_inflight: explicit > max_concurrent legacy > unlimited."""
+        if self.max_inflight > 0:
+            return self.max_inflight
+        return self.max_concurrent  # backward-compat default
 
 
 @dataclass(frozen=True)

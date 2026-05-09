@@ -157,3 +157,32 @@ class VLLMBackend(OpenAIBackend):
                     logger.debug("Prefetch endpoint returned %d", response.status_code)
         except Exception as e:
             logger.debug("send_prefetch_hints skipped (%s)", e)
+
+    async def get_queue_metrics(self) -> dict[str, Any]:
+        """Return vLLM request queue depth from the Prometheus /metrics endpoint."""
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                response = await client.get(f"{self.base_url}/metrics")
+                if response.status_code != 200:
+                    return {}
+                text = response.text
+            metrics: dict[str, Any] = {}
+            for line in text.splitlines():
+                if line.startswith("#"):
+                    continue
+                m = re.match(r"^(vllm:\w+)(?:\{[^}]*\})?\s+([\d.e+\-]+)", line)
+                if not m or m.group(1).endswith("_created"):
+                    continue
+                name, val_str = m.group(1), m.group(2)
+                try:
+                    val = float(val_str)
+                except ValueError:
+                    continue
+                if "num_requests_waiting" in name:
+                    metrics["requests_waiting"] = int(val)
+                elif "num_requests_running" in name:
+                    metrics["requests_running"] = int(val)
+            return metrics
+        except Exception as e:
+            logger.debug("get_queue_metrics failed: %s", e)
+            return {}

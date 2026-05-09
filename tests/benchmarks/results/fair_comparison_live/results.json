@@ -1,0 +1,57 @@
+{
+  "benchmark": "fair_comparison_live_gpu",
+  "instance": "A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.20.1",
+  "note_d_naive": "D-naive embeds file content in single prompt (1 forward pass). E does true multi-turn (2 forward passes + tool call). This makes D faster but E does more work. The mock benchmark is the apples-to-apples comparison.",
+  "note_tool_dedup": "Tool dedup ratio is 1.0x on real GPU because file reads complete in <1ms \u2014 each agent's tool call finishes before the next agent arrives at the ToolPool. The inflight-Future dedup window only covers truly concurrent calls. On slow tools (web search, external API, 200ms+) the dedup ratio would be 50-200x as shown in the mock.",
+  "results": {
+    "D-naive-50": {
+      "ok": 50,
+      "failed": 0,
+      "wall_clock_seconds": 2.192,
+      "throughput_agents_per_sec": 22.8,
+      "ttft_p50_seconds": 0.829,
+      "ttft_p95_seconds": 1.215,
+      "file_reads_executed": 50,
+      "mode": "single_turn_file_in_prompt"
+    },
+    "E-sdk-50": {
+      "ok": 50,
+      "failed": 0,
+      "wall_clock_seconds": 6.656,
+      "throughput_agents_per_sec": 7.5,
+      "prefix_cache_run_hit_rate": 0.881,
+      "tool_reads_executed": 50,
+      "tool_dedup_ratio": 1.0,
+      "mode": "batchagent_multi_turn"
+    },
+    "D-naive-200": {
+      "ok": 200,
+      "failed": 0,
+      "wall_clock_seconds": 8.19,
+      "throughput_agents_per_sec": 24.4,
+      "ttft_p50_seconds": 3.672,
+      "ttft_p95_seconds": 4.432,
+      "file_reads_executed": 200,
+      "mode": "single_turn_file_in_prompt"
+    },
+    "E-sdk-200": {
+      "ok": 200,
+      "failed": 0,
+      "wall_clock_seconds": 21.8,
+      "throughput_agents_per_sec": 9.2,
+      "prefix_cache_run_hit_rate": 0.908,
+      "tool_reads_executed": 200,
+      "tool_dedup_ratio": 1.0,
+      "mode": "batchagent_multi_turn"
+    }
+  },
+  "summary": {
+    "wall_ratio_E_vs_D_n50": 3.04,
+    "wall_ratio_E_vs_D_n200": 2.66,
+    "e200_wall_seconds": 21.8,
+    "e200_under_10s": false,
+    "why_not_under_10s": "7B model on A10G processes ~10 agents/sec for 2-turn tasks; 200 agents \u00d7 2 turns = 400 forward passes. GPU compute is the binding constraint, not scheduling.",
+    "vs_old_dispatch_gate": "Previous dispatch-gate scheduler took 36.5s for E N=200 multi-turn. New backpressure dispatch: 21.8s (40% improvement).",
+    "e200_cache_run_hit_rate": 0.908
+  }
+}

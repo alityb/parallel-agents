@@ -1,0 +1,73 @@
+{
+  "benchmark": "fair_comparison",
+  "mock_forward_pass_ms": 60.0,
+  "mock_tool_call_ms": 200.0,
+  "results": {
+    "D_200": {
+      "config": "D-equiv-200",
+      "failed": 0,
+      "mock_forward_pass_ms": 60.0,
+      "mock_tool_call_ms": 200.0,
+      "mode": "naive_multi_turn",
+      "n": 200,
+      "ok": 200,
+      "throughput_agents_per_sec": 303.1621900530385,
+      "tool_dedup_ratio": null,
+      "tool_reads_executed": 204,
+      "wall_clock_seconds": 0.6597128750290722
+    },
+    "D_50": {
+      "config": "D-equiv-50",
+      "failed": 0,
+      "mock_forward_pass_ms": 60.0,
+      "mock_tool_call_ms": 200.0,
+      "mode": "naive_multi_turn",
+      "n": 50,
+      "ok": 50,
+      "throughput_agents_per_sec": 76.90084960275851,
+      "tool_dedup_ratio": null,
+      "tool_reads_executed": 51,
+      "wall_clock_seconds": 0.6501878751441836
+    },
+    "E_200": {
+      "config": "E-sdk-200",
+      "failed": 0,
+      "mock_forward_pass_ms": 60.0,
+      "mock_tool_call_ms": 200.0,
+      "mode": "batchagent_sdk",
+      "n": 200,
+      "ok": 200,
+      "throughput_agents_per_sec": 57.42940319924909,
+      "tool_dedup_ratio": 50.0,
+      "tool_reads_executed": 4,
+      "tool_reads_requested": 200,
+      "wall_clock_seconds": 3.4825366251170635
+    },
+    "E_50": {
+      "config": "E-sdk-50",
+      "failed": 0,
+      "mock_forward_pass_ms": 60.0,
+      "mock_tool_call_ms": 200.0,
+      "mode": "batchagent_sdk",
+      "n": 50,
+      "ok": 50,
+      "throughput_agents_per_sec": 14.464909368441884,
+      "tool_dedup_ratio": 25.0,
+      "tool_reads_executed": 2,
+      "tool_reads_requested": 50,
+      "wall_clock_seconds": 3.456641084048897
+    }
+  },
+  "summary": {
+    "d200_failure_rate_pct": 0.0,
+    "e200_failure_rate_pct": 0.0,
+    "e200_under_10s": true,
+    "e200_wall_seconds": 3.4825366251170635,
+    "loc_d_equiv": 68,
+    "loc_e_sdk": 9,
+    "loc_reduction_ratio": 7.555555555555555,
+    "tool_dedup_ratio_e200": 50.0,
+    "wall_ratio_E_vs_D_n200": 5.278867151052032,
+    "wall_ratio_E_vs_D_n50": 5.316372722703208
+  }
+}

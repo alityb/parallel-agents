@@ -25,6 +25,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from .backends import BackendAdapter, BackendResponse, ParsedToolCall
+from .backpressure import BackpressureController, calibrate_max_inflight
 from .compaction import compact_messages_async, should_compact
 from .kvflow import KVFlowAdvisor
 from .metrics import SchedulerMetrics
@@ -59,22 +60,25 @@ class WaveScheduler:
         self.tool_pool = tool_pool or ToolPool()
         self.metrics = SchedulerMetrics()
 
-        # PrioritySemaphore: lower turns_remaining = served first (Drift 2)
-        self._semaphore = PrioritySemaphore(plan.spec.max_concurrent)
-        # Resolved tool definitions for tools specified in the spec
+        # PrioritySemaphore caps simultaneous in-flight HTTP requests (max_inflight)
+        self._semaphore = PrioritySemaphore(plan.spec.effective_max_inflight)
+        # Resolved tool definitions and schemas
         self._tools = self._resolve_tools(plan.spec.tools)
-        # Anthropic-format tool schemas for the backend
         self._tool_schemas = self._build_tool_schemas(self._tools)
-        # kv_key for the shared prefix (set after warm_prefix, stored on each state)
+        # kv_key for the shared prefix (stored on each AgentState)
         self._shared_kv_key: str | None = None
         self._kvflow_advisor: KVFlowAdvisor | None = None
-        # Checkpoint store for crash recovery and per-turn saves
+        # Checkpoint store
         self._checkpoint = None
         if plan.spec.checkpoint_dir:
             from .checkpoint import CheckpointStore
             self._checkpoint = CheckpointStore(plan.spec.checkpoint_dir)
-        # Event set when dispatch_loop should release one more agent
-        self._dispatch_token: asyncio.Queue[None] = asyncio.Queue()
+        # Backpressure controller (None = disabled, i.e. for API/mock backends)
+        self._backpressure: BackpressureController | None = (
+            BackpressureController(queue_depth_ceiling=plan.spec.backpressure_ceiling)
+            if plan.spec.backpressure_ceiling > 0
+            else None
+        )
 
     # ── public API ─────────────────────────────────────────────────────────────
 
@@ -85,6 +89,17 @@ class WaveScheduler:
         return [result for result in results if result is not None]
 
     async def stream(self) -> AsyncIterator[AgentResult]:
+        # Optional auto-calibration before first wave
+        if self.plan.spec.calibrate_backend:
+            calibrated = await calibrate_max_inflight(
+                self.backend,
+                self.plan.shared,
+                self.plan.spec.model,
+                backend_url=self.plan.spec.backend,
+            )
+            self._semaphore.set_capacity(calibrated)
+            logger.info("Auto-calibrated max_inflight to %d", calibrated)
+
         # Warm the shared prefix and store the kv_key on all future states
         self._shared_kv_key = await self.backend.warm_prefix(
             self.plan.shared, self.plan.spec.model
@@ -96,7 +111,6 @@ class WaveScheduler:
             completed_ids = self._checkpoint.get_completed_job_ids()
 
         # Build priority queue: (max_turns, tiebreaker, job)
-        # Lower max_turns = dispatched first among fresh agents
         pq: list[tuple[int, int, AgentJob]] = []
         skipped_results: list[AgentResult] = []
         for i, job in enumerate(self.plan.jobs):
@@ -107,27 +121,56 @@ class WaveScheduler:
                     continue
             heapq.heappush(pq, (job.max_turns, i, job))
 
-        # Seed the dispatch queue with max_concurrent initial tokens
-        for _ in range(min(self.plan.spec.max_concurrent, len(pq))):
-            await self._dispatch_token.put(None)
-
         result_queue: asyncio.Queue[AgentResult | None] = asyncio.Queue()
         tasks: list[asyncio.Task] = []
-        dispatched = 0
+
+        # max_dispatched: how many tasks to create before waiting for results.
+        # -1 = unlimited (dispatch all N immediately; max_inflight semaphore + backpressure control flow).
+        max_dispatched = self.plan.spec.max_dispatched
+        if max_dispatched < 0:
+            max_dispatched = len(self.plan.jobs)  # unlimited → all jobs
 
         async def dispatch_loop() -> None:
-            nonlocal dispatched
+            dispatched = 0
+            in_flight = 0  # tasks created but not yet completed
+
             while pq:
-                await self._dispatch_token.get()  # wait for a dispatch token
-                if not pq:
-                    break
+                # Respect max_dispatched: if we'd exceed it, wait for a completion
+                if in_flight >= max_dispatched:
+                    await asyncio.sleep(0.005)
+                    continue
+
+                # Backpressure: pause if backend queue is full
+                if self._backpressure:
+                    await self._backpressure.wait_for_capacity(self.backend)
+
                 _, _, job = heapq.heappop(pq)
+                in_flight += 1
+
+                async def _wrapped(j: AgentJob, counter: list) -> None:
+                    await self._run_job(j, result_queue)
+                    counter[0] -= 1
+
+                counter = [in_flight]  # mutable reference so _wrapped can decrement
                 task = asyncio.create_task(
                     self._run_job(job, result_queue),
                     name=f"agent-{job.job_id}",
                 )
                 tasks.append(task)
                 dispatched += 1
+
+                # Track completions to unblock max_dispatched gate
+                async def _track(t: asyncio.Task) -> None:
+                    nonlocal in_flight
+                    try:
+                        await t
+                    except Exception:
+                        pass
+                    finally:
+                        in_flight -= 1
+
+                asyncio.create_task(_track(task))
+                await asyncio.sleep(0)  # yield to event loop periodically
 
         # Start adaptive concurrency controller
         adaptive_task = asyncio.create_task(
@@ -136,10 +179,10 @@ class WaveScheduler:
         kvflow_task = None
         if self.plan.spec.kvflow:
             self._kvflow_advisor = KVFlowAdvisor(
-                    state_store=self.states,
-                    tool_pool=self.tool_pool,
-                    backend=self.backend,
-                )
+                state_store=self.states,
+                tool_pool=self.tool_pool,
+                backend=self.backend,
+            )
             kvflow_task = asyncio.create_task(
                 self._kvflow_advisor.run(),
                 name="kvflow-advisor",
@@ -150,9 +193,6 @@ class WaveScheduler:
             yield sr
 
         dispatcher = asyncio.create_task(dispatch_loop(), name="dispatcher")
-
-        remaining = len(pq) + len(pq)  # will be corrected after dispatch
-        # Actually count properly: total jobs minus already-skipped
         total_to_receive = len(self.plan.jobs) - len(skipped_results)
         received = 0
 
@@ -185,7 +225,7 @@ class WaveScheduler:
         job: AgentJob,
         result_queue: asyncio.Queue[AgentResult | None],
     ) -> None:
-        """Execute a job, put result on queue, and release a dispatch token."""
+        """Execute a job and put the result on the result queue."""
         result = await self._execute(job)
         if self._checkpoint:
             self._checkpoint.save_result(result)
@@ -195,8 +235,6 @@ class WaveScheduler:
             if inspect.isawaitable(maybe_awaitable):
                 await maybe_awaitable
         await result_queue.put(result)
-        # This agent is fully done → dispatch one new PENDING agent
-        await self._dispatch_token.put(None)
 
     async def _execute(self, job: AgentJob) -> AgentResult:
         state = None
@@ -261,7 +299,6 @@ class WaveScheduler:
         state.set_status(AgentStatus.RUNNING)
 
         response: BackendResponse | None = None
-        dispatch_released = False  # have we already released a dispatch token?
 
         for turn in range(start_turn, max_turns):
             state.turn = turn + 1
@@ -324,11 +361,6 @@ class WaveScheduler:
             if response.tool_calls:
                 state.set_status(AgentStatus.TOOL_WAIT)
                 state.tool_calls_pending = [tc.to_tool_call() for tc in response.tool_calls if not tc.error]
-
-                # === STAGGERED DISPATCH: release a dispatch token on TOOL_WAIT (Drift 10) ===
-                if not dispatch_released:
-                    dispatch_released = True
-                    await self._dispatch_token.put(None)
 
                 logger.info(
                     "[%s] turn=%d TOOL_WAIT: %d tool calls (semaphore free)",

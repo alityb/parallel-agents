@@ -67,6 +67,18 @@ class BackendAdapter(ABC):
         """
         return {}
 
+    async def get_queue_metrics(self) -> dict[str, Any]:
+        """Return backend queue depth metrics for backpressure dispatch.
+
+        Returns a dict with optional keys:
+          requests_waiting  int  — requests queued but not yet executing
+          requests_running  int  — requests currently being processed
+
+        Default: {} (no queue depth visible — dispatch proceeds freely).
+        vLLM override parses /metrics for vllm:num_requests_waiting/running.
+        """
+        return {}
+
     async def send_prefetch_hints(self, hints: list[Any]) -> None:
         """Send KVFlow prefetch hints. Managed/API backends no-op by default."""
         return None

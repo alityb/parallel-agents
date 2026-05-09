@@ -725,7 +725,11 @@ results = await BatchAgent.run(
     output_schema=PaperSummary,
     model="meta-llama/Llama-3.1-70B-Instruct",
     backend="vllm://localhost:8000",
-    max_concurrent=64,
+    # Concurrency — new API (max_concurrent still works, maps to max_inflight)
+    max_inflight=64,               # hard cap on simultaneous HTTP requests to backend
+    max_dispatched=-1,             # -1 = dispatch all N immediately (backpressure controls flow)
+    backpressure_ceiling=16,       # pause dispatch when vLLM queue grows above this
+    calibrate_backend=False,       # True → auto-calibrate max_inflight via 5s ramp
     max_turns=6,
     max_retries=3,
     timeout_per_agent=300,

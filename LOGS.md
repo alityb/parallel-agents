@@ -198,3 +198,14 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Hardware blocker: this route cannot prove real GPU transfer latency without a running patched vLLM server and GPU.
 - Cold KV reload latency proxy numbers recorded from the architecture/spec and TokenDance/KVFlow literature assumptions: ~50ms for ~1K-token contexts, ~100ms for ~2K-token contexts, ~200ms for ~4K-token multi-turn contexts on large 70B-class deployments. The prefetch path eliminates this reload from the critical path by moving CPU→GPU block transfer before agent reactivation.
 - Full pytest suite after prefetch route helper: 52 passed.
+
+### Phase 3B TokenDance diff cache prototype — 2026-05-09
+
+- Added `batch_agent/backends/vllm_patch/diff_cache_engine.py` with a flag-gated `DiffCacheEngine` prototype.
+- `diff_kv=False` returns `None` via `maybe_create_diff_cache_engine()` and has zero runtime effect on the scheduler or existing test suite.
+- Implemented SHA256 block content hashing, global block deduplication, per-agent sparse diff records, and async soft-timeout All-Gather (`500ms` or target completion fraction, no hard barrier per W11).
+- The implementation attempts to subclass vLLM `CacheEngine` when vLLM is installed; in CI it falls back to `object` so the algorithm remains testable without GPU/vLLM.
+- Added `tests/unit/test_diff_encoder.py` synthetic TokenDance test: 100 agents, 2,048-token shared prefix, 500-token per-agent context (400 common + 100 unique), block size 16 tokens.
+- Synthetic compression result: full blocks `16000`, stored unique blocks `853`, compression ratio `18.76x`.
+- 2.7x capacity interpretation: if stock prefix caching fits 100 concurrent agents in a fixed KV budget, the TokenDance target implies roughly 270 agents at the same memory budget; at N=500, equivalent memory pressure would drop toward ~185 stock-agent equivalents, subject to allocator fragmentation and non-KV overhead.
+- Full pytest suite after TokenDance prototype: 54 passed.

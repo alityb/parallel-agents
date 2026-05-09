@@ -1,0 +1,56 @@
+{
+  "all_pass": true,
+  "details": {
+    "500_agent_ok_counts": [
+      500,
+      500,
+      500,
+      500,
+      500
+    ],
+    "distributed_pass_rate": 1.0,
+    "fair_comparison_reads": [
+      4,
+      4,
+      4,
+      4,
+      4
+    ],
+    "fair_comparison_walls": [
+      3.4605672918260098,
+      3.469837250187993,
+      3.4595762088429183,
+      3.471788582857698,
+      3.489078000187874
+    ],
+    "kvflow_pass_rate": 1.0,
+    "loc_actual_d": 87,
+    "loc_hardcoded_d": 87,
+    "loc_ratio": 9.666666666666666,
+    "priority_semaphore_correct": 20,
+    "pytest_passed": true,
+    "tokendance_mean": 18.757327080890974,
+    "tokendance_ratios": [
+      18.757327080890974,
+      18.757327080890974,
+      18.757327080890974,
+      18.757327080890974,
+      18.757327080890974
+    ],
+    "tool_dedup_inflight_ratios": [
+      100.0,
+      100.0,
+      100.0,
+      100.0,
+      100.0
+    ],
+    "tool_dedup_lru_ratios": [
+      100.0,
+      100.0,
+      100.0,
+      100.0,
+      100.0
+    ]
+  },
+  "reps": 5
+}

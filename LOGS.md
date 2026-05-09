@@ -392,9 +392,9 @@ Using `cacheable=False` ensures the LRU is bypassed. Dedup operates via `_inflig
 
 | Config | N | Wall (s) | agents/s | OK% | tool reads | LOC |
 |---|---|---|---|---|---|---|
-| D-equiv naive | 50  | 0.65 | 76.9 | 100% | 51  | 68 |
+| D-equiv naive | 50  | 0.65 | 76.9 | 100% | 51  | **87** |
 | E BatchAgent  | 50  | 3.46 | 14.5 | 100% | 2 (inflight dedup) | 9 |
-| D-equiv naive | 200 | 0.66 | 303  | 100% | 204 | 68 |
+| D-equiv naive | 200 | 0.66 | 303  | 100% | 204 | **87** |
 | E BatchAgent  | 200 | 3.48 | 57.4 | 100% | 4 (inflight dedup) | 9 |
 
 - **E N=200: 3.48s under the 10s target** (vs 36.5s before = 10.5× speedup on mock).

@@ -286,3 +286,13 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Split Bedrock TTFT into cache-write miss and cache-read hit buckets. Padded Opus 4.5 rerun: 20 OK, 0 failed, cache write tokens `7285`, cache read tokens `138415`.
 - Split TTFT result: cache miss/write P50 `2.664s`; cache hit/read P50 `9.675s`; miss-to-hit ratio `0.275`; hit-to-miss ratio `3.63`.
 - Interpretation: Bedrock cache metadata proves cachePoint was active, but observed end-to-end TTFT did **not** improve for cache hits in this run. Bedrock managed-service queueing/model latency appears to dominate or mask prefill savings for this Opus 4.5 sequential run. Do not use the cache-hit TTFT as proof of prefill speedup on Bedrock; use token billing/cache metadata as the reliable cache signal.
+
+### Authoritative Bedrock cache latency isolation — 2026-05-09
+
+- Added `tests/benchmarks/bedrock_cache_isolation.py` and ran one focused cache measurement: 10 identical single-turn requests, sequential, no tools, no multi-turn. The system prompt includes a unique run marker plus a 1,200-token cacheable prefix to force request 1 to write cache and requests 2-10 to read cache.
+- Model: `us.anthropic.claude-opus-4-5-20251101-v1:0`, region `us-east-1`.
+- Request 1 cache mode: `write`, cache write input tokens `7232`, TTFT `2.321s`.
+- Requests 2-10 cache modes: all `read`, total cache read input tokens `65088`, P50 cache-hit TTFT `3.244s`.
+- Hit-to-miss TTFT ratio: `1.397` (cache-hit P50 was slower, not faster).
+- Confirmed finding: Bedrock's managed queue/model latency dominates prefill savings for prompts in the ~1,200-token range on this Opus 4.5 profile. Prompt caching on Bedrock provides token/cache accounting savings but did not produce latency savings in this isolated measurement.
+- Artifact: `tests/benchmarks/results/bedrock_cache_isolation/results.json`.

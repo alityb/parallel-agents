@@ -1,0 +1,164 @@
+{
+  "benchmark": "bedrock_cache_isolation",
+  "cache_read_input_tokens_requests_2_10": 65088,
+  "cache_write_input_tokens_request_1": 7232,
+  "finding": "bedrock_queue_latency_dominates_prefill_savings_for_1200_token_prefix; prompt_caching_saves_tokens_but_not_latency_at_this_scale",
+  "hit_to_miss_ttft_ratio": 1.3974647493922348,
+  "model": "us.anthropic.claude-opus-4-5-20251101-v1:0",
+  "records": [
+    {
+      "cache_mode": "write",
+      "request_index": 1,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 2.3210532090160996,
+      "usage": {
+        "cacheDetails": [
+          {
+            "inputTokens": 7232,
+            "ttl": "5m"
+          }
+        ],
+        "cacheReadInputTokens": 0,
+        "cacheWriteInputTokens": 7232,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7260
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 2,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 2.6132237080018967,
+      "usage": {
+        "cacheReadInputTokens": 7232,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7260
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 3,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 3.243590041063726,
+      "usage": {
+        "cacheReadInputTokens": 7232,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7260
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 4,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 2.4633934169542044,
+      "usage": {
+        "cacheReadInputTokens": 7232,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7260
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 5,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 2.4456422079820186,
+      "usage": {
+        "cacheReadInputTokens": 7232,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7260
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 6,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 2.2516523748636246,
+      "usage": {
+        "cacheReadInputTokens": 7232,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7260
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 7,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 16.085612792056054,
+      "usage": {
+        "cacheReadInputTokens": 7232,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7260
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 8,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 7.645889125065878,
+      "usage": {
+        "cacheReadInputTokens": 7232,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7260
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 9,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 13.398224915843457,
+      "usage": {
+        "cacheReadInputTokens": 7232,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7260
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 10,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 12.48123766691424,
+      "usage": {
+        "cacheReadInputTokens": 7232,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7260
+      }
+    }
+  ],
+  "region": "us-east-1",
+  "request_1_cache_mode": "write",
+  "requests": 10,
+  "requests_2_10_cache_modes": [
+    "read",
+    "read",
+    "read",
+    "read",
+    "read",
+    "read",
+    "read",
+    "read",
+    "read"
+  ],
+  "system_prompt_estimated_tokens": 1201,
+  "ttft_cache_hit_requests_2_10_p50_seconds": 3.243590041063726,
+  "ttft_cache_miss_request_1_p50_seconds": 2.3210532090160996,
+  "wall_clock_seconds": 65.78347991593182
+}

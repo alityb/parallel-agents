@@ -1,0 +1,12 @@
+{
+  "benchmark": "kvflow_prefetch_accuracy",
+  "mode": "mock",
+  "n": 20,
+  "prefetch_hit_rate": 1.0,
+  "simulated_tool_wait_ms": 300,
+  "status": "ok",
+  "target_hit_rate": 0.8,
+  "timestamp": 1778290449.539068,
+  "turns": 3,
+  "wall_clock_seconds": 0.0
+}

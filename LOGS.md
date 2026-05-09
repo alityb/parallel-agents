@@ -229,3 +229,20 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Failover path: surviving node reruns with `failover=True`, waits for expired leases, then claims and completes unfinished jobs from Redis state.
 - Added `tests/integration/test_distributed_scheduler.py`: starts two in-process nodes over shared mock Redis, kills node-a after 30 completions, lets leases expire, and verifies node-b completes ≥95/100 jobs (≤5% loss target).
 - Full pytest suite after distributed scheduler primitives: 56 passed.
+
+### Full benchmark suite — 2026-05-09
+
+- Added six benchmark entrypoints under `tests/benchmarks/` with mock-default execution, `--live` flags, and machine-readable `results.json` outputs.
+- Mock benchmarks run in CI/no-GPU/no-API-key environments. `--live` modes are wired as explicit live-backend entrypoints but report blockers when required datasets or hardware are missing.
+- Ran all six benchmarks and wrote result artifacts under `tests/benchmarks/results/<benchmark>/results.json`.
+
+| Benchmark | Mock result |
+|---|---|
+| `paper_summarization.py` | N=50, time-to-first=0.02s, time-to-all=0.30s, failure_rate=0.0 |
+| `code_review.py` | N=100, avg_turns=3.0, tool_wait_fraction=0.42, failure_rate=0.0 |
+| `heterogeneous_tasks.py` | N=100, 50 fast/50 slow, slot_utilization_flat=true, chaos_tool_failures=10, failure_rate=0.0 |
+| `tool_dedup_efficiency.py` | requested_reads=1000, actual_reads=10, dedup_ratio=100x |
+| `kvflow_prefetch_accuracy.py` | N=20, turns=3, simulated_tool_wait=300ms, prefetch_hit_rate=1.0 (target ≥0.80) |
+| `tokendance_compression.py` | N=100, full_blocks=16000, stored_unique_blocks=853, compression_ratio=18.76x |
+
+- Full pytest suite after benchmark additions: 56 passed.

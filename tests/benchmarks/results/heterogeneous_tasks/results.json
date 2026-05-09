@@ -1,0 +1,13 @@
+{
+  "benchmark": "heterogeneous_tasks",
+  "chaos_tool_failures_injected": 10,
+  "failure_rate": 0.0,
+  "fast_agents": 50,
+  "mode": "mock",
+  "n": 100,
+  "slot_utilization_flat": true,
+  "slow_agents": 50,
+  "status": "ok",
+  "timestamp": 1778290449.365537,
+  "wall_clock_seconds": 0.0
+}

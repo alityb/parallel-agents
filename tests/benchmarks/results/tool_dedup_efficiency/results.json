@@ -1,0 +1,10 @@
+{
+  "actual_reads": 10,
+  "benchmark": "tool_dedup_efficiency",
+  "dedup_ratio": 100.0,
+  "mode": "mock",
+  "requested_reads": 1000,
+  "status": "ok",
+  "timestamp": 1778290449.668216,
+  "wall_clock_seconds": 0.0063
+}

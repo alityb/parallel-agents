@@ -1,0 +1,11 @@
+{
+  "average_turns_per_agent": 3.0,
+  "benchmark": "code_review",
+  "failure_rate": 0.0,
+  "mode": "mock",
+  "n": 100,
+  "status": "ok",
+  "timestamp": 1778290449.274925,
+  "tool_wait_fraction": 0.42,
+  "wall_clock_seconds": 0.0
+}

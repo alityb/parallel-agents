@@ -1,0 +1,14 @@
+{
+  "benchmark": "tokendance_compression",
+  "compression_ratio": 18.757327080890974,
+  "full_blocks": 16000,
+  "mode": "mock",
+  "n": 100,
+  "per_agent_context_tokens": 500,
+  "shared_prefix_tokens": 2048,
+  "status": "ok",
+  "stored_unique_blocks": 853,
+  "target_ratio": 10.0,
+  "timestamp": 1778290449.695594,
+  "wall_clock_seconds": 0.0324
+}

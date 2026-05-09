@@ -1,0 +1,14 @@
+{
+  "benchmark": "paper_summarization",
+  "configs": [
+    "mock_batchagent"
+  ],
+  "failure_rate": 0.0,
+  "mode": "mock",
+  "n": 50,
+  "status": "ok",
+  "time_to_all_results_seconds": 0.3,
+  "time_to_first_result_seconds": 0.02,
+  "timestamp": 1778290449.230168,
+  "wall_clock_seconds": 0.0
+}

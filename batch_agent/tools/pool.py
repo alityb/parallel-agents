@@ -60,6 +60,12 @@ class ToolPool:
         except Exception as exc:
             future.set_exception(exc)
             raise
+        except BaseException as exc:
+            # CancelledError (tool timeout via asyncio.wait_for) reaches here.
+            # If we don't resolve the future, all concurrent waiters hang forever.
+            if not future.done():
+                future.set_exception(exc)
+            raise
         finally:
             self._inflight.pop(key, None)
 

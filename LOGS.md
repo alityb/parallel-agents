@@ -452,3 +452,45 @@ Note: D-naive on GPU embeds file content in prompt (1 forward pass). E does true
 - max_inflight semantics: -1 → max_concurrent, positive → overrides, =1 serialises ✓
 
 **Full pytest suite after fixes: 88 passed** (was 62 — added 26 edge-case tests).
+
+### Second round of harsh code review — 2026-05-09
+
+#### Second critical production bug found and fixed
+
+**ToolPool Future not resolved when leader coroutine receives `CancelledError`.**
+
+`except Exception` does not catch `CancelledError` (Python 3.8+: `CancelledError` inherits from `BaseException`, not `Exception`). When `asyncio.wait_for(pool.call(...), timeout=timeout_per_tool)` timed out:
+1. `CancelledError` raised inside `ToolPool.call`
+2. `except Exception` block skipped
+3. `finally` block ran: removed key from `_inflight`
+4. Future was never set (neither `.set_result()` nor `.set_exception()`)
+5. All concurrent waiters (`await self._inflight[key]`) hung permanently
+
+Confirmed by direct test: agent A times out after 50ms, agent B awaits the same Future with 500ms timeout → agent B's 500ms expired without ever receiving anything = **permanent hang**.
+
+Fix: added `except BaseException as exc` branch that calls `future.set_exception(exc)` before re-raising. Concurrent waiters now receive `CancelledError` immediately.
+
+This bug would silently stall any BatchAgent run that:
+- Has multiple concurrent agents calling the same tool
+- AND has `timeout_per_tool` set
+- AND any agent's tool call exceeds that timeout
+
+#### Dead code removed
+
+`_wrapped` coroutine and `counter = [in_flight]` were defined in `dispatch_loop` but `_wrapped` was never called. The task was created with `self._run_job()` directly. Removed both. in-flight tracking works correctly through `_track`.
+
+#### 11 regression tests added (all pass)
+
+- ToolPool: cancelled future wakes waiters with CancelledError (not hang)
+- ToolPool: fresh attempt after cancellation cleanup executes fresh
+- Full end-to-end: timeout_per_tool with 3 concurrent agents, all complete <5s
+- Dead code guard: `_wrapped` and `counter` not re-introduced
+- Empty inputs list: returns [] immediately
+- max_dispatched=1: strictly serial, peak active=1
+- Unknown tool name: returns structured error, doesn't crash
+- Oversized agent: FAILED result returned, `on_result` fires with attempts=0
+- Retry: messages reset to [user prompt only] on each retry attempt
+- PrioritySemaphore: out-of-order rate <10% across 50 concurrent waiters
+- Tool registry: re-defining same name overwrites silently
+
+**Full pytest suite: 99 passed** (was 88).

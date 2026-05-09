@@ -147,11 +147,6 @@ class WaveScheduler:
                 _, _, job = heapq.heappop(pq)
                 in_flight += 1
 
-                async def _wrapped(j: AgentJob, counter: list) -> None:
-                    await self._run_job(j, result_queue)
-                    counter[0] -= 1
-
-                counter = [in_flight]  # mutable reference so _wrapped can decrement
                 task = asyncio.create_task(
                     self._run_job(job, result_queue),
                     name=f"agent-{job.job_id}",

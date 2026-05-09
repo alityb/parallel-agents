@@ -38,6 +38,16 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Added a lightweight `TaskCompiler.build_dag("map_reduce")` descriptor for the three-stage topology.
 - Tests added: planner item dispatch, map input construction, reduce payload content, partial map failure propagation, checkpoint stage splitting, DAG descriptor, and an end-to-end mock backend verifying stage sequencing plus `on_result`.
 
+### AutoResearch example — 2026-05-09
+
+- Added `examples/auto_research.py`, a runnable three-tier research example using `BatchAgent.run_with_map_reduce()`.
+- The example defines `ResearchPlan`, `ResearchAnswer`, and `SurveyPaper` schemas, supports `--topic`, `--n-questions`, `--backend`, and `--output`, and writes a Markdown survey paper.
+- Local validation: `python3 -m py_compile examples/auto_research.py` passed; `python3 examples/auto_research.py --help` prints the expected CLI.
+- Live run blocked: `ANTHROPIC_API_KEY` is not present and no `BRAVE_SEARCH_API_KEY`/`SERPAPI_KEY` is present for `Tool.web_search`. No paper artifact was generated and no cost/timing/quality claims were made.
+- Exact validation command when credentials are available:
+  `python3 examples/auto_research.py --topic "KV cache optimization for multi-agent LLM inference" --n-questions 10 --backend anthropic:// --output examples/output/kv_cache_survey_n10.md`
+  then rerun with `--n-questions 20 --output examples/output/kv_cache_survey_n20.md` for the final demo artifact.
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

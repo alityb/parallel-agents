@@ -8,6 +8,10 @@ from typing import Any
 ToolFunc = Callable[..., Awaitable[Any]]
 
 
+class ToolError(RuntimeError):
+    """Tool execution failed in a way that should be reported to the agent."""
+
+
 @dataclass(frozen=True)
 class ToolDefinition:
     name: str
@@ -65,4 +69,4 @@ class Tool:
 
 from . import builtin as _builtin  # noqa: E402,F401
 
-__all__ = ["Tool", "ToolDefinition"]
+__all__ = ["Tool", "ToolDefinition", "ToolError"]

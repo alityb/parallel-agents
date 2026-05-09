@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from . import Tool
+from . import Tool, ToolError
 
 
 def _read_file_cache_key(args: dict[str, Any]) -> str:
@@ -118,3 +119,37 @@ async def python_eval(code: str) -> str:
         raise RuntimeError("python_eval is disabled unless BATCH_AGENT_ENABLE_PYTHON_EVAL=1")
     allowed_builtins = {"abs": abs, "len": len, "max": max, "min": min, "sum": sum, "range": range}
     return repr(eval(code, {"__builtins__": allowed_builtins}, {}))
+
+
+@Tool.define(max_tokens=4000, cacheable=False, rate_limit=10)
+async def claude_code(task: str, working_dir: str = ".") -> str:
+    """Run a Claude Agent SDK subagent on a task.
+
+    Requires: claude CLI installed + ANTHROPIC_API_KEY or Claude Max subscription.
+    Falls back to error message if claude CLI is not available.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "claude",
+            "--print",
+            "--dangerously-skip-permissions",
+            "--output-format",
+            "json",
+            task,
+            cwd=working_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError as exc:
+        raise ToolError(
+            "claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code"
+        ) from exc
+
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        raise ToolError(f"claude CLI failed: {stderr.decode(errors='replace')[:500]}")
+    try:
+        result = json.loads(stdout)
+    except json.JSONDecodeError:
+        return stdout.decode(errors="replace")
+    return result.get("result", stdout.decode(errors="replace"))

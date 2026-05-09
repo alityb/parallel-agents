@@ -15,6 +15,14 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Fixed `deploy/vllm_server.sh`: after installing vLLM and the SDK, it runs `deploy/apply_vllm_patch.py`, verifies the patched files, then starts vLLM with the frontend multiprocessing disabled.
 - Validation: `python3 -m py_compile` passed for changed Python files; `bash deploy/next_gpu_session.sh --dry-run` printed the expected command plan without executing; `deploy/apply_vllm_patch.py` successfully patched and compiled a temporary copy of vLLM 0.6.6 `cache_engine.py` and `api_server.py`; targeted pytest `tests/unit/test_vllm_prefetch_route.py tests/integration/test_sglang_backend.py -q` passed with `5 passed, 1 skipped`.
 
+### Claude Code tool integration — 2026-05-09
+
+- Added `ToolError` to `batch_agent.tools` for tool-level execution failures that should be surfaced as structured agent tool errors.
+- Added builtin `Tool.claude_code`: runs `claude --print --dangerously-skip-permissions --output-format json <task>` in the requested working directory, returns the JSON `result` field, and is non-cacheable with rate limit `10`.
+- Failure handling: nonzero Claude CLI exit raises `ToolError("claude CLI failed: ...")`; missing CLI raises `ToolError("claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code")`.
+- Added `tests/unit/test_claude_code_tool.py` covering success, nonzero return code, and `FileNotFoundError`.
+- Targeted validation: `python3 -m pytest tests/unit/test_claude_code_tool.py -q` passed with `3 passed`.
+
 - Read `AGENTS.md` in full before writing code, per instruction. The repo only contained `AGENTS.md` and `LOGS.md`, so the implementation scope became a Phase 0 foundation rather than patching existing code.
 - Implemented package metadata, public API, compiler/state dataclasses, backend adapters, one-shot scheduler, tool definitions/pool/builtins, JSON repair, CLI, and unit tests aligned to Phase 0.
 - Design choice: `BatchAgent.run()` currently returns `AgentResult` objects instead of raw schema objects. This preserves the spec principle that failures are data, but it is not yet the final ergonomic target shown in `AGENTS.md` where successful runs return plain structured outputs.

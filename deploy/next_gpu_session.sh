@@ -34,6 +34,7 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 + PYTHONPATH=$REPO python3 $SCRIPT_DIR/kvflow_benchmark.py
 + tmux kill-session -t vllm
 + pip install "sglang[srt]>=0.3" flashinfer-python --quiet
++ pip install nvidia-nccl-cu12==2.28.9 --quiet
 + tmux new-session -d -s sglang 'python -m sglang.launch_server --model $MODEL --host 0.0.0.0 --port 30000 --tp 1 --dtype bfloat16'
 + curl -sf http://localhost:30000/health
 + PYTHONPATH=$REPO python3 $SCRIPT_DIR/sglang_benchmark.py
@@ -189,6 +190,7 @@ tmux kill-session -t vllm 2>/dev/null || true
 sleep 5
 
 pip install "sglang[srt]>=0.3" flashinfer-python --quiet
+pip install nvidia-nccl-cu12==2.28.9 --quiet
 
 # Start SGLang
 tmux new-session -d -s sglang "

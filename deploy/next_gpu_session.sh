@@ -15,6 +15,9 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 + cd $REPO
 + sudo apt-get update -y -q
 + sudo apt-get install -y -q git tmux redis-server python3-pip python3-venv build-essential ninja-build
++ command -v nvcc || sudo apt-get install -y -q cuda-toolkit-12-6
++ export CUDA_HOME=/usr/local/cuda-12.6
++ export PATH=\$CUDA_HOME/bin:\$PATH
 + [ -d ~/vllm-env ] || python3 -m venv ~/vllm-env
 + source ~/vllm-env/bin/activate
 + pip install -e "$REPO[test,redis]" --quiet
@@ -49,6 +52,11 @@ cd $REPO
 echo "=== Setup ==="
 sudo apt-get update -y -q
 sudo apt-get install -y -q git tmux redis-server python3-pip python3-venv build-essential ninja-build
+if ! command -v nvcc >/dev/null 2>&1; then
+    sudo apt-get install -y -q cuda-toolkit-12-6
+fi
+export CUDA_HOME=/usr/local/cuda-12.6
+export PATH="$CUDA_HOME/bin:$PATH"
 
 # Create venv if not present
 [ -d ~/vllm-env ] || python3 -m venv ~/vllm-env

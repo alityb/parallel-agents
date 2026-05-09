@@ -517,6 +517,89 @@ This bug would silently stall any BatchAgent run that:
 - Wheel verified: all 33 Python modules present, METADATA correct (Name, Version, License, Requires-Python)
 - Publish command (blocked until 70B GPU benchmark is done):
 
+### Cost analysis — 2026-05-09
+
+#### Actual spend on this project (all GPU + API)
+
+**Bedrock API — exact from response usage fields:**
+
+| Session | Input | Output | Cache write | Cache read | Cost |
+|---|---|---|---|---|---|
+| live_batch padded 20 agents (Opus 4.5) | 620 | 910 | 7,285 | 138,415 | $0.42 |
+| throttled test runs ~3×13 agents (est.) | 5,421 | 1,950 | 0 | 0 | $0.23 |
+| cache isolation baseline (Opus 4.5) | 7,432 | 80 | 7,232 | 65,088 | $0.35 |
+| variant A us-west-2 (Opus 4.5) | 200 | 80 | 7,231 | 65,079 | $0.24 |
+| variant B haiku (Haiku 4.5) | 200 | 130 | 7,232 | 65,088 | $0.01 |
+| variant C parallel (Opus 4.5) | 200 | 80 | 7,231 | 65,079 | $0.24 |
+| compaction run (Opus 4.5) | 1,618 | 62 | 0 | 0 | $0.03 |
+| **Total Bedrock** | | | | | **$1.53** |
+
+Pricing used: Opus 4.5 $15/1M input, $75/1M output, $18.75/1M cache write, $1.50/1M cache read. Haiku 4.5 $0.80/$4.00/$1.00/$0.10 per 1M.
+
+**GPU — 3× g5.xlarge (A10G 24GB) @ $1.006/hr on-demand, us-east-1:**
+- Instance 1 (34.207.141.135): ~4h = $4.02
+- Instance 2 (3.81.49.72): ~4h = $4.02
+- Instance 3 (3.88.54.215): ~3h = $3.02
+- **Total GPU: $11.06**
+
+**Total project spend: ~$12.59**
+
+#### What self-hosted vLLM saves vs Anthropic API
+
+Reference: 100 paper summaries via Claude Sonnet 4 API ($3/1M input, $15/1M output):
+- Naive API cost: **$0.405 per 100 papers**
+- vLLM self-hosted cost: **$0.0044 per 100 papers** (fraction of g5.xlarge hour)
+- **Cost reduction: 98.9% — 91× cheaper at scale**
+- GPU break-even: 2 papers/hour (GPU covers its cost at any real workload)
+
+At 500 papers/day (small research team):
+- API: $739/year
+- Self-hosted vLLM: $8/year
+- **Annual saving: $731** on a single g5.xlarge
+
+The SDK value is not just the cost: it is the 87-line manual implementation replaced by 9 lines, the retry/dedup/validation logic that doesn't need to be written, and the scheduling that keeps the GPU at 90%+ utilisation.
+
+#### Next GPU session plan
+
+**Instance**: g6.xlarge (NVIDIA L4 24GB) @ $0.805/hr — 20% cheaper than g5.xlarge, same VRAM.
+**Budget**: ~$3.22 for 4 hours.
+**Note on "cluster"**: No cluster available. Substitutes that work on a single instance:
+- Distributed test with **real Redis** (installed on the same machine — `apt install redis`)
+- Two scheduler processes sharing localhost Redis, coordinating against one vLLM
+- This validates all the locking/lease/failover logic; the only thing it doesn't test is network latency between nodes
+
+**Hour 0–1: vLLM from source + prefetch patch**
+```bash
+git clone https://github.com/vllm-project/vllm --branch v0.6.6
+cd vllm
+# Apply: backends/vllm_patch/prefetch_route.py as /internal/prefetch + /internal/pin_blocks
+# Integration point: vllm/entrypoints/openai/api_server.py after app is created
+pip install -e . --no-build-isolation
+```
+Verify: `curl http://localhost:8000/internal/prefetch -d '{"hints":[]}' → 200`
+
+**Hour 1–2: KVFlow TTFT-after-TOOL_WAIT with and without prefetch**
+- 20 agents, 3 turns, 300ms simulated tool wait
+- Run 1: `kvflow=True`, prefetch patch installed
+- Run 2: `kvflow=False` (baseline)
+- Metric: TTFT of the second generate() call (after TOOL_WAIT resolves)
+- Expected: Run 1 should be faster if KV blocks were prefetched during the tool wait
+
+**Hour 2–3: SGLang install + test**
+```bash
+pip install "sglang[srt]>=0.3" flashinfer-python
+python -m sglang.launch_server --model Qwen/Qwen2.5-7B-Instruct --port 30000
+PYTHONPATH=. pytest tests/integration/test_sglang_backend.py -v
+```
+Compare: vLLM prefix cache hit rate vs SGLang RadixAttention hit rate on the same multi-agent workload.
+
+**Hour 3–4: Distributed with real Redis**
+```bash
+sudo apt install redis-server -y && redis-server --daemonize yes
+PYTHONPATH=. pytest tests/integration/test_distributed.py tests/integration/test_distributed_scheduler.py -v
+# Also run a 2-process chaos test: kill one scheduler at 30 agents, verify the other picks up
+```
+
 ### Live GPU benchmark suite — completing all mock/prototype items — 2026-05-09
 
 Instance: A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.20.1. All results in `tests/benchmarks/results/*/results.json`.

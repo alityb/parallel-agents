@@ -494,3 +494,33 @@ This bug would silently stall any BatchAgent run that:
 - Tool registry: re-defining same name overwrites silently
 
 **Full pytest suite: 99 passed** (was 88).
+
+### Launch preparation — 2026-05-09
+
+#### README.md
+- Written from scratch; every number sourced from a `tests/benchmarks/results/*/results.json` or LOGS.md
+- Programmatic verification: all numbers in README grep-matched against source JSONs, all pass
+- Sections: When to use → Install → Quickstart → Benchmarks (2 tables) → How it works → Backends table → Limitations (4 bullets, not softened) → Roadmap
+
+#### CLI --dashboard flag
+- Added to `batch_agent/cli.py`: `--dashboard` flag launches a Rich Live 4-panel display
+- Panels: progress bar (X/N complete), live result stream (last 5 results), metrics (cache hit rate, in-flight, throughput), timing (elapsed, ETA)
+- Polls scheduler.metrics every 500ms — no Prometheus endpoint required
+- 3 unit tests added: completes N=20 without error, appears in help output, plain run unaffected
+- Requires `rich>=13.0` (optional dependency in `pyproject.toml[dashboard]`)
+
+#### PyPI publish prep
+- `pyproject.toml` updated with: name, version (0.1.0), description, authors, license (MIT), python_requires (>=3.10), pinned minimum dependencies, optional groups [search, cli, bedrock, vllm, redis, dashboard, dev, test]
+- `MANIFEST.in` added: includes README.md, AGENTS.md, LOGS.md, deploy/, tests/benchmarks/results/
+- `LICENSE` file added (MIT)
+- Wheel built clean: `python -m build --wheel` → `batch_agent-0.1.0-py3-none-any.whl` (68KB)
+- Wheel verified: all 33 Python modules present, METADATA correct (Name, Version, License, Requires-Python)
+- Publish command (blocked until 70B GPU benchmark is done):
+  ```
+  python -m twine upload --repository pypi dist/batch_agent-0.1.0-py3-none-any.whl
+  ```
+  Prerequisites before publish:
+  1. Run 70B model benchmark (requires 2× A100 or 4× A10G)
+  2. Run live vLLM KVFlow prefetch accuracy measurement on GPU
+  3. Record cost-per-task comparison at N=100: self-hosted vLLM vs Anthropic API
+  4. Bump version to 0.2.0 after KVFlow Phase 3A live results are in LOGS.md

@@ -1,18 +1,58 @@
 [project]
 name = "batch-agent"
 version = "0.1.0"
-description = "Batch Agent SDK foundation for high-throughput agent orchestration."
+description = "High-throughput parallel LLM agent execution with tool deduplication, structured output, and self-hosted inference support."
 readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Batch Agent Contributors" }]
+keywords = ["llm", "agents", "async", "inference", "vllm", "bedrock"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "httpx>=0.27",
-    "pydantic>=2",
+    "pydantic>=2.0",
 ]
 
+[project.urls]
+Homepage   = "https://github.com/alityb/parallel-agents"
+Repository = "https://github.com/alityb/parallel-agents"
+"Bug Tracker" = "https://github.com/alityb/parallel-agents/issues"
+
 [project.optional-dependencies]
+# Search tools (web_search builtin)
+search = ["httpx>=0.27"]
+# YAML spec files in CLI
 cli = ["pyyaml>=6"]
+# AWS Bedrock Converse API
 bedrock = ["boto3>=1.34"]
-test = ["pytest>=8", "pytest-asyncio>=0.23"]
+# Self-hosted vLLM inference
+vllm = ["vllm>=0.6"]
+# Redis distributed state store (Phase 4)
+redis = ["redis>=5.0"]
+# Rich terminal dashboard
+dashboard = ["rich>=13.0"]
+# Full development install
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "rich>=13.0",
+    "pyyaml>=6",
+    "boto3>=1.34",
+]
+test = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+]
 
 [project.scripts]
 batch-agent = "batch_agent.cli:main"
@@ -20,6 +60,21 @@ batch-agent = "batch_agent.cli:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["batch_agent"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "batch_agent/",
+    "tests/",
+    "README.md",
+    "AGENTS.md",
+    "LOGS.md",
+    "deploy/",
+    "pyproject.toml",
+    "MANIFEST.in",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -46,30 +46,58 @@
   "total_cache_read_input_tokens": 138415,
   "total_cache_write_input_tokens": 7285,
   "total_input_tokens": 620,
-  "total_output_tokens": 862,
-  "ttft_p50_seconds": 8.80796814605128,
-  "ttft_p95_seconds": 16.733717875089496,
+  "total_output_tokens": 910,
+  "ttft_cache_hit_p50_seconds": 9.674642000114545,
+  "ttft_cache_hit_seconds": [
+    2.7384580420330167,
+    2.565034915925935,
+    2.3367453329265118,
+    2.438101415988058,
+    2.408518415875733,
+    10.161760041024536,
+    14.93063525017351,
+    8.122760333120823,
+    14.805364417145029,
+    9.638274375116453,
+    11.487611499847844,
+    15.002765832934529,
+    9.674642000114545,
+    9.128273833077401,
+    12.21440437505953,
+    12.94366362481378,
+    12.927739250008017,
+    11.77352741593495,
+    9.034839125117287
+  ],
+  "ttft_cache_hit_to_miss_ratio": 3.631302497350726,
+  "ttft_cache_miss_p50_seconds": 2.664234667085111,
+  "ttft_cache_miss_seconds": [
+    2.664234667085111
+  ],
+  "ttft_cache_miss_to_hit_ratio": 0.27538328209494134,
+  "ttft_p50_seconds": 9.656458187615499,
+  "ttft_p95_seconds": 14.93063525017351,
   "ttft_seconds": [
-    2.3253211670089513,
-    2.758660541847348,
-    2.2849978748708963,
-    2.2452191670890898,
-    3.0823013328481466,
-    2.5787149160169065,
-    13.329773791134357,
-    8.273640541825444,
-    11.617486249888316,
-    16.733717875089496,
-    7.0195789590943605,
-    10.09153537498787,
-    18.526324749924242,
-    5.518967542098835,
-    15.804705000016838,
-    8.427464250009507,
-    10.431849916931242,
-    15.005814375123009,
-    9.188472042093053,
-    15.233554833102971
+    2.664234667085111,
+    2.7384580420330167,
+    2.565034915925935,
+    2.3367453329265118,
+    2.438101415988058,
+    2.408518415875733,
+    10.161760041024536,
+    14.93063525017351,
+    8.122760333120823,
+    14.805364417145029,
+    9.638274375116453,
+    11.487611499847844,
+    15.002765832934529,
+    9.674642000114545,
+    9.128273833077401,
+    12.21440437505953,
+    12.94366362481378,
+    12.927739250008017,
+    11.77352741593495,
+    9.034839125117287
   ],
   "usage": [
     {
@@ -82,22 +110,15 @@
       "cacheReadInputTokens": 0,
       "cacheWriteInputTokens": 7285,
       "inputTokens": 31,
-      "outputTokens": 50,
-      "totalTokens": 7366
+      "outputTokens": 56,
+      "totalTokens": 7372
     },
     {
       "cacheReadInputTokens": 7285,
       "cacheWriteInputTokens": 0,
       "inputTokens": 31,
-      "outputTokens": 52,
-      "totalTokens": 7368
-    },
-    {
-      "cacheReadInputTokens": 7285,
-      "cacheWriteInputTokens": 0,
-      "inputTokens": 31,
-      "outputTokens": 46,
-      "totalTokens": 7362
+      "outputTokens": 53,
+      "totalTokens": 7369
     },
     {
       "cacheReadInputTokens": 7285,
@@ -117,8 +138,15 @@
       "cacheReadInputTokens": 7285,
       "cacheWriteInputTokens": 0,
       "inputTokens": 31,
-      "outputTokens": 54,
-      "totalTokens": 7370
+      "outputTokens": 56,
+      "totalTokens": 7372
+    },
+    {
+      "cacheReadInputTokens": 7285,
+      "cacheWriteInputTokens": 0,
+      "inputTokens": 31,
+      "outputTokens": 56,
+      "totalTokens": 7372
     },
     {
       "cacheReadInputTokens": 7285,
@@ -145,13 +173,6 @@
       "cacheReadInputTokens": 7285,
       "cacheWriteInputTokens": 0,
       "inputTokens": 31,
-      "outputTokens": 32,
-      "totalTokens": 7348
-    },
-    {
-      "cacheReadInputTokens": 7285,
-      "cacheWriteInputTokens": 0,
-      "inputTokens": 31,
       "outputTokens": 31,
       "totalTokens": 7347
     },
@@ -159,8 +180,15 @@
       "cacheReadInputTokens": 7285,
       "cacheWriteInputTokens": 0,
       "inputTokens": 31,
-      "outputTokens": 40,
-      "totalTokens": 7356
+      "outputTokens": 56,
+      "totalTokens": 7372
+    },
+    {
+      "cacheReadInputTokens": 7285,
+      "cacheWriteInputTokens": 0,
+      "inputTokens": 31,
+      "outputTokens": 34,
+      "totalTokens": 7350
     },
     {
       "cacheReadInputTokens": 7285,
@@ -173,15 +201,15 @@
       "cacheReadInputTokens": 7285,
       "cacheWriteInputTokens": 0,
       "inputTokens": 31,
-      "outputTokens": 41,
-      "totalTokens": 7357
+      "outputTokens": 45,
+      "totalTokens": 7361
     },
     {
       "cacheReadInputTokens": 7285,
       "cacheWriteInputTokens": 0,
       "inputTokens": 31,
-      "outputTokens": 38,
-      "totalTokens": 7354
+      "outputTokens": 36,
+      "totalTokens": 7352
     },
     {
       "cacheReadInputTokens": 7285,
@@ -194,8 +222,8 @@
       "cacheReadInputTokens": 7285,
       "cacheWriteInputTokens": 0,
       "inputTokens": 31,
-      "outputTokens": 44,
-      "totalTokens": 7360
+      "outputTokens": 42,
+      "totalTokens": 7358
     },
     {
       "cacheReadInputTokens": 7285,
@@ -208,16 +236,16 @@
       "cacheReadInputTokens": 7285,
       "cacheWriteInputTokens": 0,
       "inputTokens": 31,
-      "outputTokens": 39,
-      "totalTokens": 7355
+      "outputTokens": 42,
+      "totalTokens": 7358
     },
     {
       "cacheReadInputTokens": 7285,
       "cacheWriteInputTokens": 0,
       "inputTokens": 31,
-      "outputTokens": 35,
-      "totalTokens": 7351
+      "outputTokens": 43,
+      "totalTokens": 7359
     }
   ],
-  "wall_clock_seconds": 187.756182708079
+  "wall_clock_seconds": 184.26378433289938
 }

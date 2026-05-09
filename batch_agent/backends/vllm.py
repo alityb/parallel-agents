@@ -79,6 +79,14 @@ class VLLMBackend(OpenAIBackend):
 
         return prefix_hash
 
+    def backend_capabilities(self) -> dict[str, Any]:
+        return {
+            "prefix_pinning": True,
+            "kvflow": True,
+            "diff_kv": True,
+            "max_safe_concurrent": 64,
+        }
+
     async def get_cache_metrics(self) -> dict[str, float]:
         """Poll vLLM Prometheus metrics endpoint for prefix cache hit rate and GPU util."""
         try:

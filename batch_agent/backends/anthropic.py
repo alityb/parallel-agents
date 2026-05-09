@@ -71,6 +71,14 @@ class AnthropicBackend(BackendAdapter):
 
         return BackendResponse(content=content, raw=raw, tool_calls=tool_calls, stop_reason=stop_reason)
 
+    def backend_capabilities(self) -> dict[str, Any]:
+        return {
+            "prefix_pinning": False,
+            "kvflow": False,
+            "diff_kv": False,
+            "max_safe_concurrent": 5,
+        }
+
 
 def _messages_to_api(messages: list[Message]) -> list[dict[str, Any]]:
     """Convert internal Message objects to Anthropic API message format."""

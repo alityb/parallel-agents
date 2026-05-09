@@ -68,12 +68,16 @@ class BackendAdapter(ABC):
         return {}
 
     async def send_prefetch_hints(self, hints: list[Any]) -> None:
-        """Send KVFlow prefetch hints. API/managed backends no-op by default."""
-        return None
-
-    async def send_prefetch_hints(self, hints: list[Any]) -> None:
         """Send KVFlow prefetch hints. Managed/API backends no-op by default."""
         return None
+
+    def backend_capabilities(self) -> dict[str, Any]:
+        return {
+            "prefix_pinning": False,
+            "kvflow": False,
+            "diff_kv": False,
+            "max_safe_concurrent": 1,
+        }
 
 
 def backend_from_url(url: str) -> BackendAdapter:

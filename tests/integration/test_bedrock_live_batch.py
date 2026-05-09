@@ -32,7 +32,10 @@ def _usage_cost_usd(usage: dict) -> float | None:
 
 
 async def main() -> None:
-    backend = BedrockBackend(region=REGION)
+    backend = BedrockBackend(
+        region=REGION,
+        max_concurrent_ceiling=int(os.getenv("BEDROCK_LIVE_MAX_CONCURRENT_CEILING", "5")),
+    )
     pad_tokens = int(os.getenv("BEDROCK_CACHE_PAD_TOKENS", "0"))
     system_prompt = ""
     if pad_tokens:
@@ -45,9 +48,9 @@ async def main() -> None:
         output_schema=NumberMessage,
         model=MODEL,
         backend=f"bedrock://{REGION}/{MODEL}",
-        # Bedrock Opus profiles have low default TPS quotas; default to sequential
-        # requests for reproducible live measurements without throttling.
-        max_concurrent=int(os.getenv("BEDROCK_LIVE_MAX_CONCURRENT", "1")),
+        # Bedrock concurrency is controlled by BedrockConcurrencyController (AIMD):
+        # starts at 1, increases after quiet windows, halves on throttling.
+        max_concurrent=backend.concurrency_controller.current_limit,
         max_turns=1,
         max_retries=int(os.getenv("BEDROCK_LIVE_MAX_RETRIES", "3")),
         timeout_per_agent=float(os.getenv("BEDROCK_LIVE_TIMEOUT", "180")),
@@ -105,6 +108,14 @@ async def main() -> None:
     first_payload = backend.request_payloads[0] if backend.request_payloads else {}
     ttfts = [m.get("ttft_seconds") for m in metrics if m.get("ttft_seconds") is not None]
     usages = [m.get("usage", {}) for m in metrics]
+    cache_miss_ttfts = [
+        m.get("ttft_seconds") for m in metrics
+        if m.get("ttft_seconds") is not None and m.get("usage", {}).get("cacheWriteInputTokens", 0) > 0
+    ]
+    cache_hit_ttfts = [
+        m.get("ttft_seconds") for m in metrics
+        if m.get("ttft_seconds") is not None and m.get("usage", {}).get("cacheReadInputTokens", 0) > 0
+    ]
     costs = [_usage_cost_usd(u) for u in usages]
     costs = [c for c in costs if c is not None]
     cache_usage_keys = sorted({k for u in usages for k in u.keys() if "cache" in k.lower()})
@@ -119,6 +130,18 @@ async def main() -> None:
         "ttft_seconds": ttfts,
         "ttft_p50_seconds": statistics.median(ttfts) if ttfts else None,
         "ttft_p95_seconds": sorted(ttfts)[int(len(ttfts) * 0.95) - 1] if ttfts else None,
+        "ttft_cache_miss_seconds": cache_miss_ttfts,
+        "ttft_cache_hit_seconds": cache_hit_ttfts,
+        "ttft_cache_miss_p50_seconds": statistics.median(cache_miss_ttfts) if cache_miss_ttfts else None,
+        "ttft_cache_hit_p50_seconds": statistics.median(cache_hit_ttfts) if cache_hit_ttfts else None,
+        "ttft_cache_miss_to_hit_ratio": (
+            statistics.median(cache_miss_ttfts) / statistics.median(cache_hit_ttfts)
+            if cache_miss_ttfts and cache_hit_ttfts else None
+        ),
+        "ttft_cache_hit_to_miss_ratio": (
+            statistics.median(cache_hit_ttfts) / statistics.median(cache_miss_ttfts)
+            if cache_miss_ttfts and cache_hit_ttfts else None
+        ),
         "usage": usages,
         "failures": [
             {

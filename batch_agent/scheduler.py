@@ -468,6 +468,17 @@ class WaveScheduler:
                 metrics = await self.backend.get_cache_metrics()
                 if not metrics:
                     continue
+                if "recommended_concurrency" in metrics:
+                    recommended = max(1, int(metrics["recommended_concurrency"]))
+                    if recommended != self._semaphore.capacity:
+                        current = self._semaphore.capacity
+                        logger.info(
+                            "Backend recommended concurrency: %d→%d",
+                            current, recommended,
+                        )
+                        self._semaphore.set_capacity(recommended)
+                        self.metrics.record_concurrency_change(current, recommended, "backend-recommendation")
+                    continue
                 hit_rate = metrics.get("prefix_cache_hit_rate", 1.0)
                 gpu_util = metrics.get("gpu_utilization", 0.5)
 

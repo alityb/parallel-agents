@@ -48,6 +48,7 @@ import hashlib
 import json
 import logging
 import time
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
@@ -55,6 +56,49 @@ from . import BackendAdapter, BackendResponse, ParsedToolCall
 from batch_agent.spec import AgentJob, Message, SharedContext
 
 logger = logging.getLogger(__name__)
+
+_MODE_LIMITATIONS = """
+Bedrock backend mode limitations:
+1. Standard Bedrock quotas are low for large Claude/Opus profiles. Start with
+   max_concurrent=1-3 to avoid ThrottlingException. The AIMD controller handles
+   bursts and quota discovery, but sustained higher parallelism requires an AWS
+   Bedrock quota increase.
+2. KVFlow prefetch and TokenDance diff KV do not apply. Bedrock is managed and
+   exposes no KV cache block IDs, pinning API, prefetch API, or cache eviction
+   controls.
+3. In Bedrock mode the SDK value is tool deduplication, structured output
+   validation, retry/failure handling, result streaming, and Bedrock cachePoint
+   management. It is not GPU scheduling efficiency or KV cache co-design.
+"""
+
+
+@dataclass
+class BedrockConcurrencyController:
+    """AIMD quota-aware controller for Bedrock managed-service throttling."""
+
+    max_concurrent_ceiling: int = 3
+    current_limit: int = 1
+    clock: Any = time.monotonic
+    quiet_window_seconds: float = 60.0
+    last_throttle_at: float | None = None
+    last_increase_at: float | None = None
+
+    def record_throttle(self) -> int:
+        self.last_throttle_at = self.clock()
+        self.current_limit = max(1, self.current_limit // 2)
+        return self.current_limit
+
+    def maybe_increase(self) -> int:
+        now = self.clock()
+        if self.current_limit >= self.max_concurrent_ceiling:
+            return self.current_limit
+        if self.last_throttle_at is not None and now - self.last_throttle_at < self.quiet_window_seconds:
+            return self.current_limit
+        if self.last_increase_at is not None and now - self.last_increase_at < self.quiet_window_seconds:
+            return self.current_limit
+        self.current_limit += 1
+        self.last_increase_at = now
+        return self.current_limit
 
 
 # ── model-capability tables ────────────────────────────────────────────────────
@@ -85,6 +129,7 @@ class BedrockBackend(BackendAdapter):
         self,
         region: str | None = None,
         model_id_override: str | None = None,
+        max_concurrent_ceiling: int = 3,
         *,
         _client_factory: Any = None,  # injectable for testing
     ) -> None:
@@ -93,6 +138,9 @@ class BedrockBackend(BackendAdapter):
         self._client_factory = _client_factory  # if None, uses boto3 default chain
         self.request_metrics: list[dict[str, Any]] = []
         self.request_payloads: list[dict[str, Any]] = []
+        self.concurrency_controller = BedrockConcurrencyController(
+            max_concurrent_ceiling=max(1, max_concurrent_ceiling)
+        )
 
     @classmethod
     def from_url(cls, url: str) -> "BedrockBackend":
@@ -192,6 +240,8 @@ class BedrockBackend(BackendAdapter):
         except Exception as exc:
             # If streaming fails (model doesn't support it), fall back to converse
             msg = str(exc).lower()
+            if "throttling" in msg or "too many requests" in msg:
+                self.concurrency_controller.record_throttle()
             if "prompt caching" in msg or "cachepoint" in msg:
                 logger.debug("Bedrock cachePoint rejected for %s; retrying without cachePoint", model_id)
                 payload = _without_cache_point(payload)
@@ -216,6 +266,7 @@ class BedrockBackend(BackendAdapter):
             else:
                 raise
 
+        self.concurrency_controller.maybe_increase()
         self.request_metrics.append({
             **raw.get("metrics", {}),
             "usage": raw.get("usage", {}),
@@ -231,11 +282,19 @@ class BedrockBackend(BackendAdapter):
 
     async def get_cache_metrics(self) -> dict[str, float]:
         """Bedrock does not expose KV cache internals — always empty."""
-        return {}
+        return {"recommended_concurrency": float(self.concurrency_controller.maybe_increase())}
 
     async def send_prefetch_hints(self, hints: list[dict[str, Any]]) -> None:
         """No-op: Bedrock is a managed service with no KV prefetch API."""
         logger.debug("send_prefetch_hints: no-op for Bedrock backend (%d hints ignored)", len(hints))
+
+    def backend_capabilities(self) -> dict[str, Any]:
+        return {
+            "prefix_pinning": False,
+            "kvflow": False,
+            "diff_kv": False,
+            "max_safe_concurrent": self.concurrency_controller.current_limit,
+        }
 
     # ── helpers ────────────────────────────────────────────────────────────────
 

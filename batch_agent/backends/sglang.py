@@ -96,6 +96,14 @@ class SGLangBackend(OpenAIBackend):
                 logger.debug("SGLang warm_prefix failed: %s (continuing)", e)
         return prefix_hash
 
+    def backend_capabilities(self) -> dict[str, Any]:
+        return {
+            "prefix_pinning": False,
+            "kvflow": True,
+            "diff_kv": False,
+            "max_safe_concurrent": 64,
+        }
+
     async def generate(
         self,
         *,

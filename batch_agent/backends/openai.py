@@ -76,6 +76,14 @@ class OpenAIBackend(BackendAdapter):
             stop_reason=stop_reason,
         )
 
+    def backend_capabilities(self) -> dict[str, Any]:
+        return {
+            "prefix_pinning": False,
+            "kvflow": False,
+            "diff_kv": False,
+            "max_safe_concurrent": 5,
+        }
+
 
 def _messages_to_openai(messages: list[Message]) -> list[dict[str, Any]]:
     """Convert internal Message objects to OpenAI API format."""

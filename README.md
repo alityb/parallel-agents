@@ -30,8 +30,8 @@ results, paper = await BatchAgent.run_with_map_reduce(
     reduce="Synthesize into a survey paper",
     reduce_schema=SurveyPaper,
     tools=[Tool.web_search, Tool.claude_code],
-    model="claude-sonnet-4-6",
-    backend="anthropic://",
+    model="gpt-5.5",
+    backend="openai://",
 )
 # 20 parallel research agents -> 1 synthesized paper
 ```
@@ -117,11 +117,13 @@ Run the example:
 python examples/auto_research.py \
   --topic "KV cache optimization for multi-agent LLM inference" \
   --n-questions 20 \
-  --backend anthropic:// \
+  --backend openai:// \
   --output examples/output/kv_cache_survey.md
 ```
 
-Live AutoResearch cost/timing is not reported yet because the validation run was blocked by missing Anthropic and search API credentials.
+For `backend=openai://`, the example defaults planner, worker, and reducer agents to `gpt-5.5`. This is forced for private-access testing; override with `--model`, `--planner-model`, `--worker-model`, or `--reducer-model` if the API rejects that model ID.
+
+Live AutoResearch cost/timing is not reported yet because the validation run was blocked by Anthropic API credits and no OpenAI validation run has been completed.
 
 ---
 

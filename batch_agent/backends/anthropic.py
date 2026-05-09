@@ -27,6 +27,7 @@ class AnthropicBackend(BackendAdapter):
     def __init__(self, api_key: str | None = None, base_url: str = "https://api.anthropic.com") -> None:
         self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
         self.base_url = base_url.rstrip("/")
+        self._client: httpx.AsyncClient | None = None
 
     async def generate(
         self,
@@ -71,9 +72,12 @@ class AnthropicBackend(BackendAdapter):
             "anthropic-beta": "prompt-caching-2024-07-31",
             "content-type": "application/json",
         }
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(f"{self.base_url}/v1/messages", json=payload, headers=headers)
-            response.raise_for_status()
+        response = await self._client_for(timeout).post(
+            f"{self.base_url}/v1/messages",
+            json=payload,
+            headers=headers,
+        )
+        response.raise_for_status()
         raw = response.json()
 
         content = _extract_text(raw)
@@ -122,8 +126,12 @@ class AnthropicBackend(BackendAdapter):
             "content-type": "application/json",
         }
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                async with client.stream("POST", f"{self.base_url}/v1/messages", json=payload, headers=headers) as response:
+            async with self._client_for(timeout).stream(
+                "POST",
+                f"{self.base_url}/v1/messages",
+                json=payload,
+                headers=headers,
+            ) as response:
                     response.raise_for_status()
                     content_type = response.headers.get("content-type", "")
                     if "text/event-stream" not in content_type:
@@ -200,6 +208,18 @@ class AnthropicBackend(BackendAdapter):
 
     def backend_capabilities(self) -> dict[str, Any]:
         return _API_MODE_CAPABILITIES.copy()
+
+    def _client_for(self, timeout: float | None) -> httpx.AsyncClient:
+        if self._client is None or getattr(self._client, "is_closed", False):
+            try:
+                self._client = httpx.AsyncClient(
+                    timeout=timeout,
+                    limits=httpx.Limits(max_connections=256, max_keepalive_connections=64),
+                )
+            except TypeError:
+                # Tests may monkeypatch httpx.AsyncClient with minimal fakes.
+                self._client = httpx.AsyncClient(timeout=timeout)
+        return self._client
 
 
 def _messages_to_api(messages: list[Message]) -> list[dict[str, Any]]:

@@ -79,7 +79,7 @@ class TaskCompiler:
             rendered = json.dumps(hoisted, sort_keys=True, ensure_ascii=True)
             parts.append(f"Shared input values: {rendered}")
 
-        if schema:
+        if schema and SCHEMA_INSTRUCTION not in spec.system_prompt:
             parts.append(f"{SCHEMA_INSTRUCTION}\nSchema:\n{json.dumps(schema, sort_keys=True, ensure_ascii=True)}")
 
         return "\n\n".join(part for part in parts if part)

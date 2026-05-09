@@ -20,6 +20,7 @@ class OpenAIBackend(BackendAdapter):
     def __init__(self, api_key: str | None = None, base_url: str = "https://api.openai.com") -> None:
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.base_url = base_url.rstrip("/")
+        self._client: httpx.AsyncClient | None = None
 
     @classmethod
     def from_url(cls, url: str) -> "OpenAIBackend":
@@ -58,10 +59,12 @@ class OpenAIBackend(BackendAdapter):
         if tools:
             payload["tools"] = _convert_tools_to_openai(tools)
 
-        headers = {"authorization": f"Bearer {self.api_key}", "content-type": "application/json"}
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(f"{self.base_url}/v1/chat/completions", json=payload, headers=headers)
-            response.raise_for_status()
+        response = await self._client_for(timeout).post(
+            f"{self.base_url}/v1/chat/completions",
+            json=payload,
+            headers=self._headers(),
+        )
+        response.raise_for_status()
         raw = response.json()
 
         choice = raw["choices"][0]
@@ -110,15 +113,13 @@ class OpenAIBackend(BackendAdapter):
         if tools:
             payload["tools"] = _convert_tools_to_openai(tools)
 
-        headers = {"authorization": f"Bearer {self.api_key}", "content-type": "application/json"}
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                async with client.stream(
-                    "POST",
-                    f"{self.base_url}/v1/chat/completions",
-                    json=payload,
-                    headers=headers,
-                ) as response:
+            async with self._client_for(timeout).stream(
+                "POST",
+                f"{self.base_url}/v1/chat/completions",
+                json=payload,
+                headers=self._headers(),
+            ) as response:
                     response.raise_for_status()
                     content_type = response.headers.get("content-type", "")
                     if "text/event-stream" not in content_type:
@@ -187,6 +188,21 @@ class OpenAIBackend(BackendAdapter):
 
     def backend_capabilities(self) -> dict[str, Any]:
         return _API_MODE_CAPABILITIES.copy()
+
+    def _headers(self) -> dict[str, str]:
+        return {"authorization": f"Bearer {self.api_key}", "content-type": "application/json"}
+
+    def _client_for(self, timeout: float | None) -> httpx.AsyncClient:
+        if self._client is None or getattr(self._client, "is_closed", False):
+            try:
+                self._client = httpx.AsyncClient(
+                    timeout=timeout,
+                    limits=httpx.Limits(max_connections=256, max_keepalive_connections=64),
+                )
+            except TypeError:
+                # Tests may monkeypatch httpx.AsyncClient with minimal fakes.
+                self._client = httpx.AsyncClient(timeout=timeout)
+        return self._client
 
 
 def _messages_to_openai(messages: list[Message]) -> list[dict[str, Any]]:

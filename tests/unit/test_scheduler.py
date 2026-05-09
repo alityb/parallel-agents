@@ -125,3 +125,36 @@ def test_streaming_tool_dispatch_disabled_waits_for_generate_return() -> None:
 
     assert results[0].ok
     assert events["tool_start"] > events["generate_return"]
+
+
+def test_scheduler_preserves_tool_calls_without_backend_raw_blocks() -> None:
+    seen_messages: list[list[Message]] = []
+
+    @Tool.define(name="rawless_tool", cacheable=False)
+    async def rawless_tool() -> str:
+        return "ok"
+
+    class RawlessToolBackend(BackendAdapter):
+        async def generate(self, *, shared: SharedContext, job: AgentJob, messages: list[Message] | None = None, model: str, tools=None, timeout: float | None = None) -> BackendResponse:
+            seen_messages.append(list(messages or []))
+            if messages and any(m.role == "tool_result" for m in messages):
+                return BackendResponse(content='{"value": "done"}', raw={"usage": {}}, stop_reason="end_turn")
+            tc = ParsedToolCall(id="call_1", name="rawless_tool", args={})
+            return BackendResponse(content="", raw={"usage": {}}, tool_calls=[tc], stop_reason="tool_use")
+
+    spec = BatchSpec(
+        task="Do {x}",
+        inputs=[{"x": "a"}],
+        output_schema=Payload,
+        max_turns=2,
+        tools=[Tool.registry["rawless_tool"]],
+        streaming_tool_dispatch=False,
+    )
+
+    results = asyncio.run(WaveScheduler(TaskCompiler().compile(spec), RawlessToolBackend()).run())
+
+    assert results[0].ok
+    second_turn_messages = seen_messages[1]
+    assistant_raw = [m for m in second_turn_messages if m.role == "assistant_raw"]
+    assert assistant_raw
+    assert "rawless_tool" in assistant_raw[0].content

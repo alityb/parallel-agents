@@ -142,6 +142,7 @@ class BedrockBackend(BackendAdapter):
         self.region = region
         self.model_id_override = model_id_override
         self._client_factory = _client_factory  # if None, uses boto3 default chain
+        self._client: Any | None = None
         self.request_metrics: list[dict[str, Any]] = []
         self.request_payloads: list[dict[str, Any]] = []
         self.concurrency_controller = BedrockConcurrencyController(
@@ -316,6 +317,8 @@ class BedrockBackend(BackendAdapter):
     def _get_client(self) -> Any:
         if self._client_factory is not None:
             return self._client_factory()
+        if self._client is not None:
+            return self._client
         try:
             import boto3
             from botocore.config import Config
@@ -331,7 +334,8 @@ class BedrockBackend(BackendAdapter):
             read_timeout=120,
             connect_timeout=10,
         )
-        return boto3.client("bedrock-runtime", **kwargs)
+        self._client = boto3.client("bedrock-runtime", **kwargs)
+        return self._client
 
 
 def _without_cache_point(payload: dict[str, Any]) -> dict[str, Any]:
@@ -521,7 +525,8 @@ def _messages_to_bedrock(messages: list[Message]) -> list[dict[str, Any]]:
             result.append({"role": "user", "content": [{"text": msg.content}]})
 
         elif msg.role == "assistant":
-            result.append({"role": "assistant", "content": [{"text": msg.content}]})
+            if msg.content:
+                result.append({"role": "assistant", "content": [{"text": msg.content}]})
 
         elif msg.role == "assistant_raw":
             # JSON-encoded list of Anthropic-format content blocks
@@ -536,7 +541,9 @@ def _messages_to_bedrock(messages: list[Message]) -> list[dict[str, Any]]:
                 if not isinstance(block, dict):
                     continue
                 if block.get("type") == "text":
-                    bedrock_content.append({"text": block.get("text", "")})
+                    text = block.get("text", "")
+                    if text:
+                        bedrock_content.append({"text": text})
                 elif block.get("type") == "tool_use":
                     bedrock_content.append({
                         "toolUse": {

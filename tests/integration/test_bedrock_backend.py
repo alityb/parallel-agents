@@ -364,6 +364,28 @@ def test_message_conversion_assistant_raw():
     print("[PASS] Message conversion: assistant_raw + tool_result → Bedrock format")
 
 
+def test_message_conversion_skips_blank_assistant_text_blocks():
+    messages = [
+        Message(role="assistant", content=""),
+        Message(role="assistant_raw", content=json.dumps([
+            {"type": "text", "text": ""},
+            {"type": "tool_use", "id": "call_1", "name": "http_get", "input": {"url": "http://example.com"}},
+        ])),
+    ]
+
+    bedrock_msgs = _messages_to_bedrock(messages)
+
+    assert len(bedrock_msgs) == 1
+    assert bedrock_msgs[0]["role"] == "assistant"
+    assert bedrock_msgs[0]["content"] == [{
+        "toolUse": {
+            "toolUseId": "call_1",
+            "name": "http_get",
+            "input": {"url": "http://example.com"},
+        }
+    }]
+
+
 # ── 11. supports_prompt_caching per model ──────────────────────────────────────
 
 def test_prompt_caching_support_table():

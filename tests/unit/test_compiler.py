@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel
 
-from batch_agent.compiler import TaskCompiler
+from batch_agent.compiler import SCHEMA_INSTRUCTION, TaskCompiler
 from batch_agent.spec import BatchSpec
 
 
@@ -40,3 +40,17 @@ def test_compiler_hoists_constant_inputs() -> None:
 
     assert plan.shared.hoisted_inputs == {"domain": "biology"}
     assert "biology" in plan.shared.prefix
+
+
+def test_compiler_does_not_duplicate_schema_instruction() -> None:
+    spec = BatchSpec(
+        task="Summarize {text}",
+        inputs=[{"text": "alpha"}],
+        system_prompt=f"Custom instructions.\n\n{SCHEMA_INSTRUCTION}\nSchema:\n{{}}",
+        output_schema=Summary,
+    )
+
+    plan = TaskCompiler().compile(spec)
+
+    assert plan.shared.schema is not None
+    assert plan.shared.prefix.count(SCHEMA_INSTRUCTION) == 1

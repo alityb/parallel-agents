@@ -337,7 +337,25 @@ class WaveScheduler:
             logger.debug("[%s] turn=%d generate=%.3fs", job.job_id, state.turn, generate_elapsed)
 
             # Append assistant response to conversation history
-            if response.raw and "content" in response.raw:
+            if response.tool_calls and not (
+                response.raw and ("content" in response.raw or "choices" in response.raw)
+            ):
+                blocks = []
+                if response.content:
+                    blocks.append({"type": "text", "text": response.content})
+                for tc in response.tool_calls:
+                    if tc.error:
+                        continue
+                    blocks.append({
+                        "type": "tool_use",
+                        "id": tc.id,
+                        "name": tc.name,
+                        "input": tc.args,
+                    })
+                state.messages.append(
+                    Message(role="assistant_raw", content=json.dumps(blocks))
+                )
+            elif response.raw and "content" in response.raw:
                 state.messages.append(
                     Message(role="assistant_raw", content=json.dumps(response.raw["content"]))
                 )

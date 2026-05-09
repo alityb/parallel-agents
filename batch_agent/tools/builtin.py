@@ -39,13 +39,13 @@ async def web_search(query: str, num_results: int = 5) -> str:
 
     Backends supported (checked in order):
       1. Brave Search API  — set BRAVE_SEARCH_API_KEY
-      2. SerpAPI           — set SERPAPI_KEY
+      2. SerpAPI           — set SERPAPI_KEY or SERPAPI
 
     If neither key is set, raises RuntimeError with setup instructions.
     Results are formatted as: "Title\nURL\nSnippet\n---" blocks.
     """
     brave_key = os.getenv("BRAVE_SEARCH_API_KEY")
-    serp_key = os.getenv("SERPAPI_KEY")
+    serp_key = os.getenv("SERPAPI_KEY") or os.getenv("SERPAPI")
 
     if brave_key:
         return await _brave_search(query, num_results, brave_key)
@@ -56,7 +56,7 @@ async def web_search(query: str, num_results: int = 5) -> str:
         "web_search requires a search API key. "
         "Set one of:\n"
         "  BRAVE_SEARCH_API_KEY  — https://api.search.brave.com/\n"
-        "  SERPAPI_KEY           — https://serpapi.com/\n"
+        "  SERPAPI_KEY or SERPAPI — https://serpapi.com/\n"
         "Alternatively, register a custom web_search tool with your preferred backend."
     )
 

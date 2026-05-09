@@ -1,5 +1,60 @@
 Record all changes with time and date here. Design choices, mistakes, bugs, etc. inclusive.
 
+## 2026-05-10
+
+### OpenAI AutoResearch model defaults — 2026-05-10
+
+- Checked current official OpenAI model docs before changing defaults. The public API docs list `gpt-5.2` as the current frontier model; they do not list `gpt-5.5`.
+- Updated `examples/auto_research.py` so `backend=openai://` defaults planner, worker, reducer, and base model to `gpt-5.2`.
+- Added `--model`, `--planner-model`, `--worker-model`, and `--reducer-model` CLI overrides so a private model ID such as `gpt-5.5` can be passed explicitly without editing source.
+- Updated README AutoResearch snippets to show the OpenAI backend and `gpt-5.2` default.
+
+### Forced GPT-5.5 AutoResearch comparison attempt — 2026-05-10
+
+- Per user request, forced `examples/auto_research.py` OpenAI defaults to `gpt-5.5` for planner, worker, reducer, and base model despite public OpenAI docs not listing that model ID.
+- Updated README AutoResearch snippets to show `gpt-5.5`.
+- Updated `Tool.web_search` to accept `SERPAPI` as an alias for `SERPAPI_KEY`.
+- First live test status: blocked because `OPENAI_API_KEY`, `SERPAPI_KEY`, and `SERPAPI` were not visible in this process. No OpenAI request, cost, wall-clock, or normal-vs-BatchAgent comparison result was produced.
+- Retried after `OPENAI_API_KEY` became visible. The OpenAI API was reachable, but returned HTTP 401 `invalid_api_key`; the visible key has an Anthropic-style `sk-ant-...` prefix, not an OpenAI key. No `gpt-5.5` availability result or normal-vs-BatchAgent comparison was produced.
+- Retried after a valid OpenAI project key and `SERPAPI` were exported. `gpt-5.5` was accepted by OpenAI and resolved to `gpt-5.5-2026-04-23`.
+- Ran `tests/benchmarks/results/openai_gpt55_comparison/results.json`: N=10, same required `web_search` query, same output schema, same GPT-5.5 model, SerpAPI search backend.
+- Normal `asyncio.gather` manual 2-turn tool loop: 10/10 success, wall `9.066s`, 10 SerpAPI tool calls, 15,008 total tokens.
+- BatchAgent: 10/10 success, wall `8.956s`, 1 SerpAPI tool call after coalescing, 16,923 total tokens.
+- Result: BatchAgent saved 9 external tool calls and was `0.109s` faster in this small run, while using 1,915 more model tokens due orchestration/schema/tool-loop overhead. No USD cost was computed because public pricing for private `gpt-5.5` is not documented in-repo.
+- N=50 initial run accidentally duplicated schema instructions for BatchAgent by passing a schema-bearing `system_prompt` plus `output_schema`. That caused the apparent ~10k extra prompt tokens.
+- N=50 corrected rerun uses schema exactly once: normal path has base system + schema once; BatchAgent gets base `system_prompt` and compiler-appended `output_schema` once. Results: normal 50/50 success, wall `9.877s`, 50 SerpAPI calls, 74,093 tokens; BatchAgent 50/50 success, wall `15.547s`, 1 SerpAPI call, 74,343 tokens. The real model-token delta after removing schema duplication is `+250`, not ~10k. Result JSON overwritten at `tests/benchmarks/results/openai_gpt55_comparison/results.json`.
+
+### Claude via Bedrock comparison and adapter fix — 2026-05-10
+
+- Confirmed Claude via Bedrock is usable in this AWS account with `us.anthropic.claude-opus-4-5-20251101-v1:0`; `anthropic.claude-sonnet-4-20250514-v1:0` was rejected for on-demand throughput and requires an inference-profile ID.
+- Bedrock comparison used N=10, SerpAPI, model `us.anthropic.claude-opus-4-5-20251101-v1:0`, backend `bedrock://us-east-1`, and concurrency cap 3 to avoid quota throttling. Result JSON: `tests/benchmarks/results/bedrock_claude_comparison/results.json`.
+- First BatchAgent Bedrock run exposed a real adapter/scheduler bug: Bedrock tool-call responses do not carry Anthropic `content` or OpenAI `choices`, so the scheduler stored an empty assistant text message before the tool result. Bedrock rejects blank text content blocks.
+- Fixed the scheduler to preserve parsed tool calls as `assistant_raw` when a backend returns tool calls without Anthropic/OpenAI raw content blocks. Also made Bedrock message conversion skip blank assistant text blocks.
+- Regression tests added for rawless tool-call preservation and blank Bedrock assistant text conversion.
+- Final Bedrock result after fix and `timeout_per_turn=180`: normal capped `asyncio.gather` 10/10 success, wall `185.616s`, 10 SerpAPI calls, 26,188 total tokens; BatchAgent 10/10 success, wall `228.125s`, 3 SerpAPI calls, 26,336 total tokens.
+- Bedrock conclusion: yes, Claude via Bedrock works. With the schema duplication removed, token overhead is small (`+148` tokens on N=10). BatchAgent saved 7 external tool calls but was slower on wall clock with this Opus profile and Bedrock latency.
+
+### Token and wall-time optimization pass — 2026-05-10
+
+- Root cause of the large BatchAgent token delta was not OpenAI system prompts. It was duplicate schema injection in the benchmark path: the caller put schema instructions in `system_prompt` while also passing `output_schema`, and the compiler appended the schema again.
+- Added a compiler guard: if `system_prompt` already contains the SDK schema instruction, the compiler preserves `output_schema` for validation but does not append the schema a second time.
+- Added regression coverage for duplicate schema prevention.
+- Reduced API backend wall-time overhead by reusing clients per backend instance instead of creating a new HTTP/Boto client on every request:
+  - `OpenAIBackend` now reuses an `httpx.AsyncClient` with connection pooling.
+  - `AnthropicBackend` now reuses an `httpx.AsyncClient` with connection pooling.
+  - `BedrockBackend` now reuses the boto3 Bedrock Runtime client.
+- Fixed coalesced tool timeout behavior: if the owner of a shared tool call is cancelled by `timeout_per_tool`, waiters now receive a normal tool execution error instead of `CancelledError`, preventing scheduler hangs.
+- Full test suite after the optimization pass: `138 passed, 1 skipped`.
+- Remaining larger token wins are not Python-level: use native provider structured output instead of prompt-injected schema where available, avoid fanning out long identical tool results to every agent, and move shared context to self-hosted vLLM/SGLang/Dynamo where KV prefix reuse actually avoids recomputation instead of only reducing user code.
+
+### Task 2 AutoResearch live run attempt — 2026-05-10
+
+- Requested run: `examples/auto_research.py` with `n=10`, topic `KV cache optimization for multi-agent LLM inference`, and `backend=anthropic://`.
+- `ANTHROPIC_API_KEY` was present and the Anthropic API was reachable.
+- `BRAVE_SEARCH_API_KEY`, `SERPAPI_KEY`, and `SERPAPI` were not visible to this process, so the retry used the requested fallback: a realistic 400ms mocked `web_search` while keeping the Anthropic backend live.
+- The run did not complete. Anthropic returned HTTP 400 for the live model calls. A minimal probe against both `claude-opus-4-6` and `claude-sonnet-4-6` returned: `Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.`
+- No wall-clock, cost, usage metadata, or `paper.md` artifact was produced. `examples/output/` was not created and no paper was committed.
+
 ## 2026-05-09
 
 ### W15 billing header cache poisoning fix — 2026-05-09

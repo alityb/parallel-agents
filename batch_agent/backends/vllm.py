@@ -26,6 +26,7 @@ from ..utils import (
     PREFIX_WARM_TIMEOUT,
     parse_prometheus_metrics,
     prefix_hash,
+    strip_preamble_headers,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,8 @@ class VLLMBackend(OpenAIBackend):
     async def warm_prefix(self, shared: SharedContext, model: str) -> str | None:
         if not shared.prefix:
             return None
-        phash = prefix_hash(shared.prefix)
+        prefix = strip_preamble_headers(shared.prefix) if shared.strip_preamble else shared.prefix
+        phash = prefix_hash(prefix)
         async with httpx.AsyncClient(timeout=PREFIX_WARM_TIMEOUT) as client:
             # vLLM ≥0.6: use chat completions with max_tokens=1 to force prefix KV fill.
             # Legacy zero-token /v1/completions no longer works in vLLM 0.20+.
@@ -60,7 +62,7 @@ class VLLMBackend(OpenAIBackend):
                     f"{self.base_url}/v1/chat/completions",
                     json={
                         "model": model,
-                        "messages": [{"role": "system", "content": shared.prefix},
+                        "messages": [{"role": "system", "content": prefix},
                                      {"role": "user", "content": "ping"}],
                         "max_tokens": 1,
                     },
@@ -99,6 +101,7 @@ class VLLMBackend(OpenAIBackend):
         """
         if self.block_sharing_probe_agents <= 0:
             return
+        prefix = strip_preamble_headers(shared.prefix) if shared.strip_preamble else shared.prefix
         before = await self._gpu_cache_usage_perc()
         if before is None:
             return
@@ -110,7 +113,7 @@ class VLLMBackend(OpenAIBackend):
                         f"{self.base_url}/v1/chat/completions",
                         json={
                             "model": model,
-                            "messages": [{"role": "system", "content": shared.prefix},
+                            "messages": [{"role": "system", "content": prefix},
                                          {"role": "user", "content": "ping"}],
                             "max_tokens": 1,
                         },

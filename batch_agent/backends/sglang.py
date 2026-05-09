@@ -41,6 +41,7 @@ from ..utils import (
     PREFIX_WARM_TIMEOUT,
     parse_prometheus_metrics,
     prefix_hash,
+    strip_preamble_headers,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,8 @@ class SGLangBackend(OpenAIBackend):
     async def warm_prefix(self, shared: SharedContext, model: str) -> str | None:
         if not shared.prefix:
             return None
-        phash = prefix_hash(shared.prefix)
+        prefix = strip_preamble_headers(shared.prefix) if shared.strip_preamble else shared.prefix
+        phash = prefix_hash(prefix)
         # SGLang RadixAttention caches automatically; a warm-up call primes the tree
         async with httpx.AsyncClient(timeout=PREFIX_WARM_TIMEOUT) as client:
             try:
@@ -78,7 +80,7 @@ class SGLangBackend(OpenAIBackend):
                     response = await client.post(
                         f"{self.base_url}/generate",
                         json={
-                            "text": shared.prefix,
+                            "text": prefix,
                             "sampling_params": {"max_new_tokens": 0},
                         },
                         headers={"authorization": f"Bearer {self.api_key}"},
@@ -87,7 +89,7 @@ class SGLangBackend(OpenAIBackend):
                     # OpenAI-compat: zero-token completion
                     response = await client.post(
                         f"{self.base_url}/v1/completions",
-                        json={"model": model, "prompt": shared.prefix, "max_tokens": 0},
+                        json={"model": model, "prompt": prefix, "max_tokens": 0},
                         headers={"authorization": f"Bearer {self.api_key}"},
                     )
                 if response.status_code in (200, 400):
@@ -144,7 +146,7 @@ class SGLangBackend(OpenAIBackend):
         Tool calling in native mode is not yet supported by SGLang natively;
         falls back to prompt-based tool injection if tools are requested.
         """
-        system_text = shared.prefix or ""
+        system_text = strip_preamble_headers(shared.prefix) if shared.strip_preamble else (shared.prefix or "")
         if messages is not None:
             # Build a text prompt from message history
             prompt_parts = []

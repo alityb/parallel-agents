@@ -9,7 +9,7 @@ import httpx
 
 from . import BackendAdapter, BackendResponse, ParsedToolCall
 from ..spec import AgentJob, Message, SharedContext
-from ..utils import DEFAULT_MAX_TOKENS
+from ..utils import DEFAULT_MAX_TOKENS, strip_preamble_headers
 
 # Capabilities shared by all API-mode (non-self-hosted) backends.
 _API_MODE_CAPABILITIES = {
@@ -43,7 +43,8 @@ class AnthropicBackend(BackendAdapter):
 
         system: str | list[dict[str, Any]]
         if shared.prefix:
-            system = [{"type": "text", "text": shared.prefix, "cache_control": {"type": "ephemeral"}}]
+            system_prompt = strip_preamble_headers(shared.prefix) if shared.strip_preamble else shared.prefix
+            system = [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
         else:
             system = ""
 

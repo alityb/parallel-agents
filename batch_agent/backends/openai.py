@@ -11,6 +11,7 @@ import httpx
 from . import BackendAdapter, BackendResponse, ParsedToolCall
 from .anthropic import _API_MODE_CAPABILITIES
 from ..spec import AgentJob, Message, SharedContext
+from ..utils import strip_preamble_headers
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,8 @@ class OpenAIBackend(BackendAdapter):
 
         api_messages: list[dict[str, Any]] = []
         if shared.prefix:
-            api_messages.append({"role": "system", "content": shared.prefix})
+            system_prompt = strip_preamble_headers(shared.prefix) if shared.strip_preamble else shared.prefix
+            api_messages.append({"role": "system", "content": system_prompt})
 
         if messages is not None:
             api_messages.extend(_messages_to_openai(messages))

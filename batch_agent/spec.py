@@ -79,6 +79,7 @@ class BatchSpec:
     on_result: Callable[[AgentResult], Any] | None = None
     diff_kv: bool = False
     kvflow: bool = True
+    strip_preamble: bool = True
     predictive_prewarm: bool = False
     checkpoint_dir: str | Path | None = None
     no_hoist: bool = False
@@ -111,6 +112,7 @@ class SharedContext:
     prefix: str
     schema: dict[str, Any] | None = None
     hoisted_inputs: dict[str, Any] = field(default_factory=dict)
+    strip_preamble: bool = True
 
 
 @dataclass(frozen=True)

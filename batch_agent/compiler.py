@@ -20,7 +20,16 @@ class TaskCompiler:
         schema = self._schema_for(spec.output_schema)
         prefix = self._build_prefix(spec, fields, schema)
         jobs = [self._build_job(spec, index, dict(input_data), prefix) for index, input_data in enumerate(spec.inputs)]
-        return ExecutionPlan(shared=SharedContext(prefix=prefix, schema=schema, hoisted_inputs=self._hoisted(spec, fields)), jobs=jobs, spec=spec)
+        return ExecutionPlan(
+            shared=SharedContext(
+                prefix=prefix,
+                schema=schema,
+                hoisted_inputs=self._hoisted(spec, fields),
+                strip_preamble=spec.strip_preamble,
+            ),
+            jobs=jobs,
+            spec=spec,
+        )
 
     def _build_job(self, spec: BatchSpec, index: int, input_data: dict[str, Any], prefix: str) -> AgentJob:
         try:

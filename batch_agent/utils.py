@@ -6,6 +6,7 @@ across backends, compiler, __init__, checkpoint, cli, and distributed.
 from __future__ import annotations
 
 import hashlib
+import re
 import statistics
 from typing import Any
 
@@ -78,6 +79,27 @@ def p99(values: list[float]) -> float | None:
 
 
 # ── Prefix KV hashing ──────────────────────────────────────────────────────────
+
+# Headers that vary per session and poison the prefix cache.
+# Source: NVIDIA Dynamo blog, May 2026 — confirmed on Claude Code prompts.
+_PREAMBLE_PATTERN = re.compile(
+    r"^(x-anthropic-[^\n]*\n|x-amz-[^\n]*\n)",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def strip_preamble_headers(prompt: str) -> str:
+    """Remove session-variant headers before prefix hashing and cache warming.
+
+    Claude Code prepends a session-specific billing header at token zero:
+        x-anthropic-billing-header: cc_version=0.2.93; cch=abc123==
+    This header changes per session, making every agent's prefix unique and
+    defeating prefix caching entirely. Strip it before tokenization.
+
+    Reference: NVIDIA Dynamo blog May 2026, --strip-anthropic-preamble flag.
+    """
+    return _PREAMBLE_PATTERN.sub("", prompt)
+
 
 def prefix_hash(text: str) -> str:
     """Return the SHA-256 hex digest of *text* encoded as UTF-8.

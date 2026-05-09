@@ -2,6 +2,14 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 
 ## 2026-05-09
 
+### W15 billing header cache poisoning fix — 2026-05-09
+
+- Added `strip_preamble_headers(prompt)` to remove session-variant `x-anthropic-*` and `x-amz-*` preamble lines before prefix hashing, cache warming, and backend system-prompt sends.
+- Added `BatchSpec.strip_preamble` with default `True` and propagated it through `SharedContext`; setting it to `False` preserves headers as an explicit escape hatch.
+- Applied stripping to vLLM `warm_prefix()`, vLLM/OpenAI-compatible `generate()`, Anthropic, Bedrock, and SGLang native/OpenAI-compatible paths.
+- Added unit coverage for hash stability, multiple-header stripping, unchanged prompts with no preamble, and the `strip_preamble=False` escape hatch. Added vLLM integration coverage showing two different session headers produce the same warm-prefix hash when stripping is enabled and different hashes when disabled.
+- Expected impact: when `Tool.claude_code` injects a session-specific billing header at token zero, prefix cache hit rate should return to the normal shared-prefix range (target ≥90%, previously measured API-cache workload 96.8%) instead of collapsing toward zero because every agent prefix hashes differently.
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

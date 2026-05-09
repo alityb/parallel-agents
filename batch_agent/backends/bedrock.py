@@ -53,7 +53,13 @@ from urllib.parse import urlparse
 
 from . import BackendAdapter, BackendResponse, ParsedToolCall
 from ..spec import AgentJob, Message, SharedContext
-from ..utils import INTERNAL_HTTP_TIMEOUT, NO_API_KEY, DEFAULT_MAX_TOKENS, prefix_hash
+from ..utils import (
+    INTERNAL_HTTP_TIMEOUT,
+    NO_API_KEY,
+    DEFAULT_MAX_TOKENS,
+    prefix_hash,
+    strip_preamble_headers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +188,8 @@ class BedrockBackend(BackendAdapter):
         """
         if not shared.prefix:
             return None
-        return prefix_hash(shared.prefix)
+        prefix = strip_preamble_headers(shared.prefix) if shared.strip_preamble else shared.prefix
+        return prefix_hash(prefix)
 
     async def generate(
         self,
@@ -205,7 +212,8 @@ class BedrockBackend(BackendAdapter):
 
         # System prompt with optional cachePoint (Claude on Bedrock only)
         if shared.prefix:
-            system_block: dict[str, Any] = {"text": shared.prefix}
+            system_prompt = strip_preamble_headers(shared.prefix) if shared.strip_preamble else shared.prefix
+            system_block: dict[str, Any] = {"text": system_prompt}
             if _supports_prompt_caching(model_id):
                 payload["system"] = [system_block, {"cachePoint": {"type": "default"}}]
             else:

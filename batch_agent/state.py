@@ -100,15 +100,14 @@ class RedisStreamsStateStore:
 
     def acquire_lease(self, job_id: str, ttl_seconds: float) -> bool:
         key = self._lease_key(job_id)
-        # Redis SET key value NX EX ttl
-        return bool(self.redis.set(key, self.node_id, nx=True, ex=ttl_seconds))
+        return bool(self.redis.set(key, self.node_id, nx=True, **_redis_ttl_kwargs(ttl_seconds)))
 
     def renew_lease(self, job_id: str, ttl_seconds: float) -> bool:
         key = self._lease_key(job_id)
         owner = self.redis.get(key)
         if owner != self.node_id:
             return False
-        self.redis.set(key, self.node_id, ex=ttl_seconds)
+        self.redis.set(key, self.node_id, **_redis_ttl_kwargs(ttl_seconds))
         return True
 
     def release_lease(self, job_id: str) -> None:
@@ -140,6 +139,14 @@ class RedisStreamsStateStore:
 
     def _lease_key(self, job_id: str) -> str:
         return f"agent:{job_id}:lease"
+
+
+def _redis_ttl_kwargs(ttl_seconds: float) -> dict[str, int]:
+    if ttl_seconds <= 0:
+        raise ValueError("Redis lease TTL must be positive")
+    if float(ttl_seconds).is_integer():
+        return {"ex": int(ttl_seconds)}
+    return {"px": max(1, int(ttl_seconds * 1000))}
 
 
 def _state_to_json(state: AgentState) -> str:

@@ -51,10 +51,10 @@ async def main():
     class RedisPyAdapter:
         def __init__(self, r): self._r = r
         def get(self, k): return self._r.get(k)
-        def set(self, k, v, nx=False, ex=None):
+        def set(self, k, v, nx=False, ex=None, px=None):
             if nx:
-                return self._r.set(k, v, nx=True, ex=ex)
-            return self._r.set(k, v, ex=ex)
+                return self._r.set(k, v, nx=True, ex=ex, px=px)
+            return self._r.set(k, v, ex=ex, px=px)
         def delete(self, k): return self._r.delete(k)
         def xadd(self, stream, fields): return self._r.xadd(stream, fields)
 

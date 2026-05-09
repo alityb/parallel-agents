@@ -21,13 +21,15 @@ class MockRedis:
         self._cleanup(key)
         return self.values.get(key)
 
-    def set(self, key: str, value, nx: bool = False, ex: float | None = None):
+    def set(self, key: str, value, nx: bool = False, ex: int | None = None, px: int | None = None):
         self._cleanup(key)
         if nx and key in self.values:
             return False
         self.values[key] = value
         if ex is not None:
             self.expiry[key] = time.time() + ex
+        if px is not None:
+            self.expiry[key] = time.time() + (px / 1000)
         return True
 
     def delete(self, key: str) -> None:

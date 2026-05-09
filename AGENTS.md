@@ -88,7 +88,8 @@ This is a batch execution engine. Input list in, result list out, as fast as phy
 │  │  (deduplicated, batched, rate-limited, predictive pre-warm)   │   │
 │  └──────────────────────────┬────────────────────────────────── ┘   │
 └─────────────────────────────│───────────────────────────────────────┘
-                              │ vLLM OpenAI-compat HTTP
+                              │ vLLM/SGLang OpenAI-compat HTTP
+                              │ + Dynamo nvext.agent_hints
                               │ + /internal/prefetch endpoint
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
@@ -104,7 +105,7 @@ This is a batch execution engine. Input list in, result list out, as fast as phy
 │  └────────────────────────────────────────────────────────────┘   │
 │                                                                   │
 │  ┌────────────────────────────────────────────────────────────┐   │
-│  │         vLLM / SGLang (self-hosted)                         │   │
+│  │         vLLM / SGLang / NVIDIA Dynamo (self-hosted)         │   │
 │  │    OR   Anthropic / OpenAI API (degraded mode)              │   │
 │  └────────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────┘
@@ -345,6 +346,22 @@ async for result in BatchAgent.stream(...):
 ```
 
 Internal `asyncio.Queue`. Wave Scheduler pushes to it as agents complete. `on_result` callback fires immediately per result. Full list returned at end.
+
+---
+
+### 3.9 Dynamo Adapter *(new in v0.2)*
+
+`backend="dynamo://localhost:8000"` extends the vLLM/OpenAI-compatible adapter with NVIDIA Dynamo request extensions.
+
+**nvext.agent_hints mapping:** The KVFlow Advisor already computes scheduler facts Dynamo needs: `steps_to_execution`, `kv_key`, turn count, and priority. The Dynamo adapter maps those into:
+- `latency_sensitivity`: higher when reactivation is imminent
+- `priority`: remaining-turn priority
+- `speculative_prefill`: true when a KV key exists
+- `osl`: conservative output sequence length estimate, default `512`
+
+**Streaming tool dispatch:** Dynamo-native `tool_call_dispatch` SSE events are parsed into `StreamingToolCall` objects so tools can start before the full model response completes.
+
+**Preamble stripping:** Dynamo's `--strip-anthropic-preamble` behavior is mirrored by BatchAgent's `strip_preamble_headers()` before prefix hashing and request dispatch.
 
 ---
 

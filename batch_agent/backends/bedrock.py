@@ -307,6 +307,7 @@ class BedrockBackend(BackendAdapter):
             "prompt_cache_latency_benefit": False,
             "kvflow": False,
             "diff_kv": False,
+            "nvext_agent_hints": False,
             "max_safe_concurrent": self.concurrency_controller.current_limit,
         }
 

@@ -52,6 +52,7 @@ class OpenAIBackend(BackendAdapter):
             api_messages.append({"role": "user", "content": job.prompt})
 
         payload: dict[str, Any] = {"model": model, "messages": api_messages}
+        _apply_request_extensions(payload, metadata)
 
         # Convert Anthropic-format tool schemas to OpenAI format if provided
         if tools:
@@ -105,6 +106,7 @@ class OpenAIBackend(BackendAdapter):
             api_messages.append({"role": "user", "content": job.prompt})
 
         payload: dict[str, Any] = {"model": model, "messages": api_messages, "stream": True}
+        _apply_request_extensions(payload, metadata)
         if tools:
             payload["tools"] = _convert_tools_to_openai(tools)
 
@@ -355,3 +357,11 @@ def _convert_tools_to_openai(anthropic_tools: list[dict[str, Any]]) -> list[dict
             },
         })
     return openai_tools
+
+
+def _apply_request_extensions(payload: dict[str, Any], metadata: dict[str, Any] | None) -> None:
+    if not metadata:
+        return
+    extensions = metadata.get("request_extensions")
+    if isinstance(extensions, dict):
+        payload.update(extensions)

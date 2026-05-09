@@ -20,6 +20,15 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Expected savings: for max_turns=3 with 500ms tool latency, up to 1.5s per agent if each turn's tool latency overlaps with ongoing generation.
 - Measured mock savings: one 100ms tool call with 100ms remaining generation ran in `0.204s` with streaming dispatch vs `0.306s` without it, saving `0.101s`.
 
+### NVIDIA Dynamo nvext.agent_hints — 2026-05-09
+
+- Added `BatchSpec.nvext_agent_hints` defaulting to `False`.
+- Added `batch_agent.backends.dynamo.DynamoBackend` for `backend="dynamo://host:port"`. It extends the vLLM/OpenAI-compatible path and attaches `nvext.agent_hints` when the spec flag is enabled.
+- Hint mapping: `steps_to_execution` controls `latency_sensitivity`, remaining turns control `priority`, `kv_key` controls `speculative_prefill`, and `osl` defaults to `512`.
+- Added Dynamo-native `tool_call_dispatch` SSE parsing so streaming tool dispatch works with Dynamo events, not only OpenAI/vLLM `tool_calls` chunks.
+- Backend capabilities now include `nvext_agent_hints`; Dynamo reports `True`, vLLM/SGLang/Anthropic/Bedrock report `False`.
+- Tests added: unit coverage for hint construction, payload attach/absence, and integration coverage for a mock Dynamo SSE server validating `nvext` presence and parsing `tool_call_dispatch`.
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

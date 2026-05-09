@@ -104,6 +104,7 @@ class SGLangBackend(OpenAIBackend):
             "prefix_pinning": False,
             "kvflow": True,
             "diff_kv": False,
+            "nvext_agent_hints": False,
             "max_safe_concurrent": 64,
         }
 

@@ -13,6 +13,7 @@ def test_backend_capabilities_declared() -> None:
         "prompt_cache_latency_benefit": False,
         "kvflow": False,
         "diff_kv": False,
+        "nvext_agent_hints": False,
         "max_safe_concurrent": 1,
     }
     assert AnthropicBackend(api_key="x").backend_capabilities()["kvflow"] is False

@@ -16,6 +16,7 @@ _API_MODE_CAPABILITIES = {
     "prefix_pinning": False,
     "kvflow": False,
     "diff_kv": False,
+    "nvext_agent_hints": False,
     "max_safe_concurrent": 5,
 }
 

@@ -151,6 +151,7 @@ class VLLMBackend(OpenAIBackend):
             "prefix_pinning": True,
             "kvflow": True,
             "diff_kv": True,
+            "nvext_agent_hints": False,
             "max_safe_concurrent": 64,
         }
 

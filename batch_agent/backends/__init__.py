@@ -155,6 +155,9 @@ def backend_from_url(url: str) -> BackendAdapter:
     if url.startswith("vllm://"):
         from .vllm import VLLMBackend
         return VLLMBackend.from_url(url)
+    if url.startswith("dynamo://"):
+        from .dynamo import DynamoBackend
+        return DynamoBackend.from_url(url)
     if url.startswith("sglang://"):
         from .sglang import SGLangBackend
         return SGLangBackend.from_url(url)

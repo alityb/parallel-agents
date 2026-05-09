@@ -18,6 +18,7 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 + [ -d ~/vllm-env ] || python3 -m venv ~/vllm-env
 + source ~/vllm-env/bin/activate
 + pip install -e "$REPO[test,redis]" --quiet
++ pip install setuptools_scm wheel packaging --quiet
 + [ -d ~/vllm-src ] || git clone --depth 1 --branch v0.6.6 https://github.com/vllm-project/vllm ~/vllm-src
 + cd ~/vllm-src
 + python3 $SCRIPT_DIR/apply_vllm_patch.py
@@ -63,6 +64,7 @@ echo "=========================================================="
 
 # Install our SDK plus test/Redis dependencies used later in this session.
 pip install -e "$REPO[test,redis]" --quiet
+pip install setuptools_scm wheel packaging --quiet
 
 # Clone vLLM 0.6.6 if not present
 if [ ! -d ~/vllm-src ]; then

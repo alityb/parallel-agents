@@ -32,7 +32,7 @@ from typing import Any
 
 import httpx
 
-from . import _http_url_from_scheme
+from . import BackendResponse, _http_url_from_scheme
 from .openai import OpenAIBackend, _extract_tool_calls, _messages_to_openai, _convert_tools_to_openai
 from ..spec import AgentJob, Message, SharedContext
 from ..utils import (

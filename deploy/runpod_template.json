@@ -32,6 +32,6 @@
       "value": "/workspace/parallel-agents"
     }
   ],
-  "startScript": "set -euo pipefail; if [ ! -d /workspace/parallel-agents ]; then git clone https://github.com/your-org/parallel-agents.git /workspace/parallel-agents; fi; bash /workspace/parallel-agents/deploy/vllm_server.sh",
+  "startScript": "set -euo pipefail; if [ ! -d /workspace/parallel-agents ]; then git clone https://github.com/alityb/parallel-agents.git /workspace/parallel-agents; fi; bash /workspace/parallel-agents/deploy/vllm_server.sh",
   "readme": "Starts vLLM on one A100 80GB with prefix caching enabled and Batch Agent patch helpers importable. Exposes OpenAI-compatible API on port 8000."
 }

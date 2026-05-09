@@ -2,6 +2,19 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 
 ## 2026-05-09
 
+### Deploy GPU session hardening — 2026-05-09
+
+- Read `AGENTS.md`, `LOGS.md`, and the pasted audit/status report before editing. No separate audit report file exists in the repo; the only audit-named artifact is `tests/unit/test_audit_gap_coverage.py`.
+- Fixed `deploy/next_gpu_session.sh`: added `--dry-run`, computed `SCRIPT_DIR` from the script location, replaced `/tmp/kvflow_benchmark.py`, `/tmp/sglang_benchmark.py`, and `/tmp/real_redis_chaos.py` with deploy-relative script paths, and added `--disable-frontend-multiprocessing` when starting patched vLLM so the API process can reach in-process CacheEngine objects.
+- Fixed `deploy/runpod_template.json`: replaced the placeholder clone URL with `https://github.com/alityb/parallel-agents.git`.
+- Fixed `deploy/sglang_benchmark.py`: it now invokes `pytest tests/integration/test_sglang_backend.py -v` through `sys.executable` and preserves the current environment while setting `PYTHONPATH`.
+- Added `tests/integration/test_sglang_backend.py` so the deploy benchmark's pytest target exists. The live health check skips cleanly when SGLang is not running and exercises the server when it is.
+- Fixed a latent SGLang native-mode bug: `SGLangBackend._generate_native()` now has `BackendResponse` imported.
+- Reworked `batch_agent/backends/vllm_patch/prefetch_route.py` to prefetch via vLLM 0.6.6-style swap-in block pairs. It accepts direct `block_ids`/`blocks`, hint-level `block_ids`/`blocks`, or `kv_key` mappings from a registry, then calls `CacheEngine.prefetch()` if present or `CacheEngine.swap_in()` via `torch` as fallback.
+- Rewrote `deploy/apply_vllm_patch.py` for vLLM 0.6.6. It now patches `vllm/worker/cache_engine.py` with `CacheEngine.prefetch()` implemented as a wrapper around existing `swap_in()`, patches `vllm/entrypoints/openai/api_server.py` with `/internal/prefetch` and `/internal/pin_blocks`, and verifies both patch markers before exit.
+- Fixed `deploy/vllm_server.sh`: after installing vLLM and the SDK, it runs `deploy/apply_vllm_patch.py`, verifies the patched files, then starts vLLM with the frontend multiprocessing disabled.
+- Validation: `python3 -m py_compile` passed for changed Python files; `bash deploy/next_gpu_session.sh --dry-run` printed the expected command plan without executing; `deploy/apply_vllm_patch.py` successfully patched and compiled a temporary copy of vLLM 0.6.6 `cache_engine.py` and `api_server.py`; targeted pytest `tests/unit/test_vllm_prefetch_route.py tests/integration/test_sglang_backend.py -q` passed with `5 passed, 1 skipped`.
+
 - Read `AGENTS.md` in full before writing code, per instruction. The repo only contained `AGENTS.md` and `LOGS.md`, so the implementation scope became a Phase 0 foundation rather than patching existing code.
 - Implemented package metadata, public API, compiler/state dataclasses, backend adapters, one-shot scheduler, tool definitions/pool/builtins, JSON repair, CLI, and unit tests aligned to Phase 0.
 - Design choice: `BatchAgent.run()` currently returns `AgentResult` objects instead of raw schema objects. This preserves the spec principle that failures are data, but it is not yet the final ergonomic target shown in `AGENTS.md` where successful runs return plain structured outputs.

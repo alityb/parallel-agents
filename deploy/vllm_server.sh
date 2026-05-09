@@ -27,14 +27,22 @@ if [[ -d "${BATCH_AGENT_REPO}" ]]; then
   export PYTHONPATH="${BATCH_AGENT_REPO}:${PYTHONPATH:-}"
 fi
 
-# Patch availability check. The actual /internal/prefetch and /internal/pin_blocks
-# route registration is provided by batch_agent.backends.vllm_patch.prefetch_route.
-# vLLM 0.6.x integrators should import register_prefetch_routes(app, ...) from
-# vllm/entrypoints/openai/api_server.py once cache_engine/block_manager are available.
+# Apply and verify the vLLM source/site-package patch before serving.
+if [[ ! -d "${BATCH_AGENT_REPO}" ]]; then
+  echo "ERROR: BATCH_AGENT_REPO=${BATCH_AGENT_REPO} does not exist; cannot apply vLLM patch" >&2
+  exit 1
+fi
+python3 "${BATCH_AGENT_REPO}/deploy/apply_vllm_patch.py"
 python3 - <<'PY'
-from batch_agent.backends.vllm_patch.prefetch_route import register_prefetch_routes
-from batch_agent.backends.vllm_patch.diff_cache_engine import DiffCacheEngine
-print("Batch Agent vLLM patch helpers import OK")
+from pathlib import Path
+import vllm
+
+root = Path(vllm.__file__).resolve().parents[1]
+api = root / "vllm/entrypoints/openai/api_server.py"
+cache = root / "vllm/worker/cache_engine.py"
+assert "BatchAgent KVFlow prefetch patch" in api.read_text()
+assert "def prefetch(self, block_ids)" in cache.read_text()
+print("Batch Agent vLLM patch verification OK")
 PY
 
 exec python3 -m vllm.entrypoints.openai.api_server \
@@ -44,4 +52,5 @@ exec python3 -m vllm.entrypoints.openai.api_server \
   --enable-prefix-caching \
   --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}" \
   --enable-auto-tool-choice \
-  --tool-call-parser hermes
+  --tool-call-parser hermes \
+  --disable-frontend-multiprocessing

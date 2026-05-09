@@ -75,10 +75,10 @@ async def main():
     # Run the existing integration tests
     import subprocess
     proc = subprocess.run(
-        ["python3", "-m", "pytest", "tests/integration/test_sglang_backend.py",
+        [sys.executable, "-m", "pytest", "tests/integration/test_sglang_backend.py",
          "-v", "--tb=short", "--no-header"],
         cwd="/home/ubuntu/parallel-agents",
-        env={"PYTHONPATH": "/home/ubuntu/parallel-agents", "PATH": "/usr/bin:/bin"},
+        env={**__import__("os").environ, "PYTHONPATH": "/home/ubuntu/parallel-agents"},
         capture_output=True, text=True
     )
     test_output = proc.stdout[-3000:]  # last 3000 chars

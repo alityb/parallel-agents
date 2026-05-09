@@ -4,9 +4,43 @@
 # Budget: ~$3.22 for 4 hours
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO=/home/ubuntu/parallel-agents
 MODEL=Qwen/Qwen2.5-7B-Instruct
 RESULTS=/tmp/session_results
+
+if [[ "${1:-}" == "--dry-run" ]]; then
+    cat <<EOF
++ mkdir -p $RESULTS
++ cd $REPO
++ sudo apt-get update -y -q
++ sudo apt-get install -y -q git tmux redis-server python3-pip python3-venv build-essential ninja-build
++ [ -d ~/vllm-env ] || python3 -m venv ~/vllm-env
++ source ~/vllm-env/bin/activate
++ pip install -e $REPO --quiet
++ [ -d ~/vllm-src ] || git clone --depth 1 --branch v0.6.6 https://github.com/vllm-project/vllm ~/vllm-src
++ cd ~/vllm-src
++ python3 $SCRIPT_DIR/apply_vllm_patch.py
++ pip install -e . --no-build-isolation --quiet
++ tmux kill-session -t vllm
++ tmux new-session -d -s vllm 'python -m vllm.entrypoints.openai.api_server --model $MODEL --host 0.0.0.0 --port 8000 --enable-prefix-caching --gpu-memory-utilization 0.85 --max-model-len 8192 --dtype bfloat16 --enable-auto-tool-choice --tool-call-parser hermes --disable-frontend-multiprocessing'
++ curl -sf http://localhost:8000/health
++ curl -X POST http://localhost:8000/internal/prefetch ...
++ PYTHONPATH=$REPO python3 $SCRIPT_DIR/kvflow_benchmark.py
++ tmux kill-session -t vllm
++ pip install "sglang[srt]>=0.3" flashinfer-python --quiet
++ tmux new-session -d -s sglang 'python -m sglang.launch_server --model $MODEL --host 0.0.0.0 --port 30000 --tp 1 --dtype bfloat16'
++ curl -sf http://localhost:30000/health
++ PYTHONPATH=$REPO python3 $SCRIPT_DIR/sglang_benchmark.py
++ redis-server --daemonize yes --port 6379
++ redis-cli ping
++ PYTHONPATH=$REPO python3 -m pytest tests/integration/test_distributed.py tests/integration/test_distributed_scheduler.py -v --tb=short
++ PYTHONPATH=$REPO python3 $SCRIPT_DIR/real_redis_chaos.py
++ ls -la $RESULTS/
+EOF
+    exit 0
+fi
+
 mkdir -p $RESULTS
 
 cd $REPO
@@ -50,6 +84,7 @@ tmux new-session -d -s vllm "
     --enable-prefix-caching --gpu-memory-utilization 0.85 \
     --max-model-len 8192 --dtype bfloat16 \
     --enable-auto-tool-choice --tool-call-parser hermes \
+    --disable-frontend-multiprocessing \
     2>&1 | tee /tmp/vllm_patched.log
 "
 
@@ -79,7 +114,7 @@ echo "HOUR 2: KVFlow TTFT benchmark (with vs without prefetch)"
 echo "=========================================================="
 
 cd $REPO
-PYTHONPATH=$REPO python3 /tmp/kvflow_benchmark.py
+PYTHONPATH=$REPO python3 "$SCRIPT_DIR/kvflow_benchmark.py"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HOUR 3: SGLang install + test
@@ -111,7 +146,7 @@ done
 
 # Run integration tests
 cd $REPO
-PYTHONPATH=$REPO python3 /tmp/sglang_benchmark.py
+PYTHONPATH=$REPO python3 "$SCRIPT_DIR/sglang_benchmark.py"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HOUR 4: Distributed with real Redis
@@ -133,7 +168,7 @@ PYTHONPATH=$REPO python3 -m pytest \
     -v --tb=short 2>&1 | tee $RESULTS/distributed_pytest.txt
 
 # Real Redis chaos test
-PYTHONPATH=$REPO python3 /tmp/real_redis_chaos.py
+PYTHONPATH=$REPO python3 "$SCRIPT_DIR/real_redis_chaos.py"
 
 echo ""
 echo "=========================================================="

@@ -12,8 +12,8 @@ class MockCacheEngine:
     def __init__(self) -> None:
         self.calls = []
 
-    def prefetch(self, block_ids, destination: str) -> None:
-        self.calls.append((list(block_ids), destination))
+    def prefetch(self, block_pairs) -> None:
+        self.calls.append([list(pair) for pair in block_pairs])
 
 
 class MockBlockManager:
@@ -36,9 +36,21 @@ def test_prefetch_route_maps_kv_keys_to_block_ids_and_calls_cache_engine() -> No
     }
     result = asyncio.run(handle_prefetch_request(payload, cache_engine=cache, kv_registry=registry))
     assert result["ok"] is True
-    assert result["prefetched"] == {"kv-a": [1, 2, 3], "kv-b": [4]}
+    assert result["prefetched"] == {"kv-a": [[1, 1], [2, 2], [3, 3]], "kv-b": [[4, 4]]}
     assert result["missing"] == ["kv-missing"]
-    assert cache.calls == [([1, 2, 3], "gpu"), ([4], "gpu")]
+    assert cache.calls == [[[1, 1], [2, 2], [3, 3]], [[4, 4]]]
+
+
+def test_prefetch_route_accepts_explicit_block_pairs() -> None:
+    cache = MockCacheEngine()
+    result = asyncio.run(handle_prefetch_request(
+        {"block_ids": [[10, 20], [11, 21]]},
+        cache_engine=cache,
+        kv_registry={},
+    ))
+    assert result["ok"] is True
+    assert result["prefetched"] == {"__direct__": [[10, 20], [11, 21]]}
+    assert cache.calls == [[[10, 20], [11, 21]]]
 
 
 def test_pin_blocks_route_maps_kv_keys_to_block_ids_and_calls_block_manager() -> None:

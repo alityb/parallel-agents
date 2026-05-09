@@ -8,7 +8,8 @@ infrastructure. They do not implement tensor transfer logic themselves.
 Expected integration point in vLLM 0.6.x:
   - Register these routes in vllm/entrypoints/openai/api_server.py after the app
     and engine/client are initialized.
-  - Provide `cache_engine` (object exposing `prefetch(block_ids, destination)`)
+  - Provide `cache_engine` (object exposing `prefetch(block_ids)` or
+    `swap_in(src_to_dst)`)
     and a `kv_registry` mapping kv_key -> list[int block_ids].
 
 The SDK sends hints shaped like:
@@ -16,8 +17,9 @@ The SDK sends hints shaped like:
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 
 @dataclass(frozen=True)
@@ -41,26 +43,78 @@ def _coerce_hints(payload: Mapping[str, Any]) -> list[InternalPrefetchHint]:
     return hints
 
 
+def _coerce_block_pairs(blocks: Sequence[Any]) -> list[list[int]]:
+    """Return vLLM swap_in pairs from either block IDs or explicit pairs.
+
+    vLLM 0.6.6 CacheEngine.swap_in expects a CPU tensor shaped ``[-1, 2]``:
+    ``[cpu_block_id, gpu_block_id]``. For a plain list of block IDs, we use
+    the same ID for source and destination; callers that know both IDs can pass
+    explicit ``[[cpu_id, gpu_id], ...]`` pairs.
+    """
+    pairs: list[list[int]] = []
+    for block in blocks:
+        if isinstance(block, (list, tuple)) and len(block) == 2:
+            pairs.append([int(block[0]), int(block[1])])
+        else:
+            bid = int(block)
+            pairs.append([bid, bid])
+    return pairs
+
+
+async def _prefetch_block_pairs(cache_engine: Any, block_pairs: list[list[int]]) -> None:
+    """Execute CacheEngine prefetch/swap_in without blocking the event loop."""
+    if not block_pairs:
+        return
+
+    def _run() -> None:
+        if hasattr(cache_engine, "prefetch"):
+            cache_engine.prefetch(block_pairs)
+            return
+        if hasattr(cache_engine, "swap_in"):
+            try:
+                import torch
+            except ImportError as exc:  # pragma: no cover - host vLLM has torch
+                raise RuntimeError("torch is required to call CacheEngine.swap_in") from exc
+            cache_engine.swap_in(torch.tensor(block_pairs, device="cpu", dtype=torch.int64))
+            return
+        raise AttributeError("cache_engine must expose prefetch() or swap_in()")
+
+    await asyncio.to_thread(_run)
+
+
 async def handle_prefetch_request(
     payload: Mapping[str, Any],
     *,
     cache_engine: Any,
     kv_registry: Mapping[str, list[int]],
 ) -> dict[str, Any]:
-    """Map kv_keys to block IDs and call cache_engine.prefetch()."""
+    """Map request blocks/kv_keys to block pairs and call CacheEngine swap-in."""
+    direct_blocks = payload.get("block_ids") or payload.get("blocks")
+    if direct_blocks:
+        block_pairs = _coerce_block_pairs(direct_blocks)
+        await _prefetch_block_pairs(cache_engine, block_pairs)
+        return {"ok": True, "prefetched": {"__direct__": block_pairs}, "missing": []}
+
     hints = _coerce_hints(payload)
     # Highest priority first, then soonest ETA.
     hints.sort(key=lambda h: (-h.priority, h.eta_seconds))
 
-    prefetched: dict[str, list[int]] = {}
+    prefetched: dict[str, list[list[int]]] = {}
     missing: list[str] = []
     for hint in hints:
-        block_ids = kv_registry.get(hint.kv_key)
+        raw_blocks = kv_registry.get(hint.kv_key)
+        hint_block_ids = None
+        for raw_hint in payload.get("hints", []):
+            if str(raw_hint.get("kv_key", "")) == hint.kv_key:
+                hint_block_ids = raw_hint.get("block_ids") or raw_hint.get("blocks")
+                break
+        block_ids = hint_block_ids or raw_blocks
         if not block_ids:
             missing.append(hint.kv_key)
             continue
-        cache_engine.prefetch(block_ids, destination="gpu")
-        prefetched[hint.kv_key] = list(block_ids)
+        block_pairs = _coerce_block_pairs(block_ids)
+        await _prefetch_block_pairs(cache_engine, block_pairs)
+        prefetched[hint.kv_key] = block_pairs
 
     return {"ok": True, "prefetched": prefetched, "missing": missing}
 

@@ -26,18 +26,22 @@ tested without a GPU and SGLang installation.  Recorded in LOGS.md.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
-import re
 from typing import Any
-from urllib.parse import urlparse
 
 import httpx
 
-from . import BackendAdapter, BackendResponse, ParsedToolCall
+from . import _http_url_from_scheme
 from .openai import OpenAIBackend, _extract_tool_calls, _messages_to_openai, _convert_tools_to_openai
-from batch_agent.spec import AgentJob, Message, SharedContext
+from ..spec import AgentJob, Message, SharedContext
+from ..utils import (
+    INTERNAL_HTTP_TIMEOUT,
+    NO_API_KEY,
+    PREFIX_WARM_TIMEOUT,
+    parse_prometheus_metrics,
+    prefix_hash,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,22 +59,19 @@ class SGLangBackend(OpenAIBackend):
         base_url: str = "http://localhost:30000",
         use_native: bool = False,
     ) -> None:
-        super().__init__(api_key=api_key or "EMPTY", base_url=base_url)
+        super().__init__(api_key=api_key or NO_API_KEY, base_url=base_url)
         self.use_native = use_native
 
     @classmethod
     def from_url(cls, url: str) -> "SGLangBackend":
-        parsed = urlparse(url)
-        scheme = "http" if parsed.scheme == "sglang" else parsed.scheme
-        base_url = f"{scheme}://{parsed.netloc}"
-        return cls(base_url=base_url)
+        return cls(base_url=_http_url_from_scheme(url, "sglang"))
 
     async def warm_prefix(self, shared: SharedContext, model: str) -> str | None:
         if not shared.prefix:
             return None
-        prefix_hash = hashlib.sha256(shared.prefix.encode("utf-8")).hexdigest()
+        phash = prefix_hash(shared.prefix)
         # SGLang RadixAttention caches automatically; a warm-up call primes the tree
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=PREFIX_WARM_TIMEOUT) as client:
             try:
                 if self.use_native:
                     # Native /generate endpoint
@@ -91,10 +92,10 @@ class SGLangBackend(OpenAIBackend):
                     )
                 if response.status_code in (200, 400):
                     # 400 is acceptable for max_tokens=0 on some backends
-                    logger.debug("SGLang prefix warmed, hash=%s", prefix_hash[:12])
+                    logger.debug("SGLang prefix warmed, hash=%s", phash[:12])
             except Exception as e:
                 logger.debug("SGLang warm_prefix failed: %s (continuing)", e)
-        return prefix_hash
+        return phash
 
     def backend_capabilities(self) -> dict[str, Any]:
         return {
@@ -186,23 +187,13 @@ class SGLangBackend(OpenAIBackend):
     async def get_cache_metrics(self) -> dict[str, float]:
         """Parse SGLang Prometheus metrics for cache stats."""
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=INTERNAL_HTTP_TIMEOUT) as client:
                 response = await client.get(f"{self.base_url}/metrics")
                 if response.status_code != 200:
                     return {}
-            text = response.text
+                raw = parse_prometheus_metrics(response.text, prefix="sglang:")
             metrics: dict[str, float] = {}
-            for line in text.splitlines():
-                if line.startswith("#"):
-                    continue
-                m = re.match(r"^(sglang:\w+)\s+([\d.e+\-]+)", line)
-                if not m:
-                    continue
-                name, value_str = m.group(1), m.group(2)
-                try:
-                    value = float(value_str)
-                except ValueError:
-                    continue
+            for name, value in raw.items():
                 if "cache_hit" in name.lower():
                     metrics["prefix_cache_hit_rate"] = value
                 elif "token_usage" in name:
@@ -224,7 +215,7 @@ class SGLangBackend(OpenAIBackend):
             return
         payload_hints = [h.to_dict() if hasattr(h, "to_dict") else h for h in hints]
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=INTERNAL_HTTP_TIMEOUT) as client:
                 response = await client.post(
                     f"{self.base_url}/internal/prefetch_radix",
                     json={"hints": payload_hints},

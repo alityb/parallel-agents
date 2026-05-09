@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import time
@@ -10,6 +9,7 @@ from typing import Any
 
 from . import Tool, ToolDefinition
 from .sql import BatchCollector
+from ..utils import p50, p75, stable_hash as _stable_hash_util
 
 logger = logging.getLogger(__name__)
 
@@ -72,19 +72,12 @@ class ToolPool:
     def p75_latency(self, tool_name: str) -> float | None:
         """Return P75 latency for a tool, or None if insufficient data."""
         data = self._latencies.get(tool_name)
-        if not data or len(data) < 2:
-            return None
-        sorted_data = sorted(data)
-        idx = int(len(sorted_data) * 0.75)
-        return sorted_data[min(idx, len(sorted_data) - 1)]
+        return p75(data) if data and len(data) >= 2 else None
 
     def p50_latency(self, tool_name: str) -> float | None:
+        """Return P50 latency for a tool, or None if no data."""
         data = self._latencies.get(tool_name)
-        if not data:
-            return None
-        sorted_data = sorted(data)
-        idx = len(sorted_data) // 2
-        return sorted_data[idx]
+        return p50(data) if data else None
 
     def _record_latency(self, tool_name: str, elapsed: float) -> None:
         lst = self._latencies.setdefault(tool_name, [])
@@ -102,7 +95,7 @@ class ToolPool:
         if definition.cache_key_func:
             payload = definition.cache_key_func(args)
         else:
-            payload = stable_hash(args)
+            payload = _stable_hash_util(args)
         return f"{definition.name}:{payload}"
 
     def _get_cached(self, key: str) -> Any:
@@ -136,11 +129,6 @@ class ToolPool:
             return result
         omitted = (len(result) - max_chars + 3) // 4
         return result[:max_chars] + f"\n[TRUNCATED - {omitted} tokens omitted]"
-
-
-def stable_hash(value: Any) -> str:
-    encoded = json.dumps(value, sort_keys=True, default=str, ensure_ascii=True).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
 
 
 class _TokenBucket:

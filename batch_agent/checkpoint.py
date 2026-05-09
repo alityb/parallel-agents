@@ -15,6 +15,7 @@ from typing import Any
 
 from .spec import AgentError, AgentResult, Message
 from .state import AgentState, AgentStatus
+from .utils import to_jsonable
 
 logger = logging.getLogger(__name__)
 
@@ -78,15 +79,8 @@ class CheckpointStore:
 
     def save_result(self, result: AgentResult) -> None:
         """Save a completed result."""
-        output_json = None
-        if result.output is not None:
-            if hasattr(result.output, "model_dump"):
-                output_json = json.dumps(result.output.model_dump())
-            elif hasattr(result.output, "dict"):
-                output_json = json.dumps(result.output.dict())
-            else:
-                output_json = json.dumps(result.output, default=str)
-
+        serialised = to_jsonable(result.output)
+        output_json = json.dumps(serialised, default=str) if serialised is not None else None
         error_json = json.dumps(result.error.__dict__) if result.error else None
 
         self._conn.execute("""

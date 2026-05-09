@@ -9,6 +9,7 @@ from typing import Any
 
 from . import BatchAgent
 from .metrics import start_metrics_server
+from .utils import to_jsonable
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -101,16 +102,11 @@ def _load_spec(path: Path) -> dict[str, Any]:
 
 
 def _result_to_json(result: Any) -> dict[str, Any]:
-    output = result.output
-    if hasattr(output, "model_dump"):
-        output = output.model_dump()
-    elif hasattr(output, "dict"):
-        output = output.dict()
     return {
         "job_id": result.job_id,
         "index": result.index,
         "ok": result.ok,
-        "output": output,
+        "output": to_jsonable(result.output),
         "error": None if result.error is None else result.error.__dict__,
         "attempts": result.attempts,
     }

@@ -5,6 +5,7 @@ import string
 from typing import Any
 
 from .spec import AgentJob, BatchSpec, ExecutionPlan, SharedContext
+from .utils import extract_schema
 
 
 SCHEMA_INSTRUCTION = (
@@ -72,15 +73,7 @@ class TaskCompiler:
         return hoisted
 
     def _schema_for(self, output_schema: Any | None) -> dict[str, Any] | None:
-        if output_schema is None:
-            return None
-        if hasattr(output_schema, "model_json_schema"):
-            return output_schema.model_json_schema()
-        if hasattr(output_schema, "schema"):
-            return output_schema.schema()
-        if isinstance(output_schema, dict):
-            return output_schema
-        raise TypeError("output_schema must be a Pydantic model class or JSON schema dict")
+        return extract_schema(output_schema)
 
     def _template_fields(self, template: str) -> list[str]:
         fields: list[str] = []

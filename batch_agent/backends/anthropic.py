@@ -8,7 +8,16 @@ from typing import Any
 import httpx
 
 from . import BackendAdapter, BackendResponse, ParsedToolCall
-from batch_agent.spec import AgentJob, Message, SharedContext
+from ..spec import AgentJob, Message, SharedContext
+from ..utils import DEFAULT_MAX_TOKENS
+
+# Capabilities shared by all API-mode (non-self-hosted) backends.
+_API_MODE_CAPABILITIES = {
+    "prefix_pinning": False,
+    "kvflow": False,
+    "diff_kv": False,
+    "max_safe_concurrent": 5,
+}
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +55,7 @@ class AnthropicBackend(BackendAdapter):
 
         payload: dict[str, Any] = {
             "model": model,
-            "max_tokens": 4096,
+            "max_tokens": DEFAULT_MAX_TOKENS,
             "system": system,
             "messages": api_messages,
         }
@@ -72,12 +81,7 @@ class AnthropicBackend(BackendAdapter):
         return BackendResponse(content=content, raw=raw, tool_calls=tool_calls, stop_reason=stop_reason)
 
     def backend_capabilities(self) -> dict[str, Any]:
-        return {
-            "prefix_pinning": False,
-            "kvflow": False,
-            "diff_kv": False,
-            "max_safe_concurrent": 5,
-        }
+        return _API_MODE_CAPABILITIES.copy()
 
 
 def _messages_to_api(messages: list[Message]) -> list[dict[str, Any]]:

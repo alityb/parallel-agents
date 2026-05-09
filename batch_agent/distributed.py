@@ -22,6 +22,7 @@ from .compiler import TaskCompiler
 from .repair import parse_and_validate_output
 from .spec import AgentJob, AgentResult, BatchSpec, ExecutionPlan, Message
 from .state import AgentError, AgentState, AgentStatus, RedisStreamsStateStore
+from .utils import to_jsonable
 
 
 class NodeStopped(RuntimeError):
@@ -103,7 +104,7 @@ class DistributedWaveScheduler:
                     status=AgentStatus.COMPLETE if result.ok else AgentStatus.FAILED,
                     turn=1,
                     messages=[Message("user", job.prompt)],
-                    output=_jsonable(result.output),
+                    output=to_jsonable(result.output),
                     error=result.error,
                 )
                 current = self.store.load(job.job_id)
@@ -139,10 +140,4 @@ class DistributedWaveScheduler:
                 error=AgentError(type=exc.__class__.__name__, message=str(exc)),
             )
 
-
-def _jsonable(value: Any) -> Any:
-    if hasattr(value, "model_dump"):
-        return value.model_dump()
-    if hasattr(value, "dict"):
-        return value.dict()
-    return value
+# NOTE: _jsonable was removed — use batch_agent.utils.to_jsonable everywhere.

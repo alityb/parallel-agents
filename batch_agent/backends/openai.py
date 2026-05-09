@@ -9,7 +9,8 @@ from urllib.parse import urlparse
 import httpx
 
 from . import BackendAdapter, BackendResponse, ParsedToolCall
-from batch_agent.spec import AgentJob, Message, SharedContext
+from .anthropic import _API_MODE_CAPABILITIES
+from ..spec import AgentJob, Message, SharedContext
 
 logger = logging.getLogger(__name__)
 
@@ -77,12 +78,7 @@ class OpenAIBackend(BackendAdapter):
         )
 
     def backend_capabilities(self) -> dict[str, Any]:
-        return {
-            "prefix_pinning": False,
-            "kvflow": False,
-            "diff_kv": False,
-            "max_safe_concurrent": 5,
-        }
+        return _API_MODE_CAPABILITIES.copy()
 
 
 def _messages_to_openai(messages: list[Message]) -> list[dict[str, Any]]:

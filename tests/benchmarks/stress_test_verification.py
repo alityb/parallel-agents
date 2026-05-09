@@ -11,21 +11,10 @@ import inspect
 import json
 import math
 import statistics
-import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-PASS = "[PASS]"
-FAIL = "[FAIL]"
-WARN = "[WARN]"
-
-
-def check(label: str, condition: bool, detail: str = "") -> bool:
-    status = PASS if condition else FAIL
-    print(f"  {status} {label}" + (f": {detail}" if detail else ""))
-    return condition
+from _common import PASS, FAIL, WARN, close, report as check, run_pytest, write_results
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -386,14 +375,8 @@ async def test_backpressure_stress() -> None:
 
 def test_pytest_suite() -> None:
     print("\n── pytest suite ───────────────────────────────────────────────────")
-    import subprocess
-    result = subprocess.run(
-        ["python3", "-m", "pytest", "tests/unit/", "-q", "--tb=no"],
-        capture_output=True, text=True, cwd=str(Path(__file__).parent.parent.parent)
-    )
-    lines = result.stdout.strip().splitlines()
-    last = lines[-1] if lines else ""
-    check("pytest unit tests all pass", result.returncode == 0, last)
+    passed, last = run_pytest("tests/unit/", extra_args=["--tb=no"])
+    check("pytest unit tests all pass", passed, last)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

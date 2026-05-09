@@ -8,8 +8,9 @@ from .backends import BackendAdapter, backend_from_url
 from .compiler import SCHEMA_INSTRUCTION, TaskCompiler
 from .repair import parse_and_validate_output
 from .scheduler import WaveScheduler
-from .spec import AgentJob, AgentResult, BatchSpec, ExecutionPlan, Message, SharedContext
+from .spec import AgentResult, BatchSpec, SharedContext
 from .tools import Tool
+from .utils import extract_schema, to_jsonable
 
 
 class BatchAgent:
@@ -28,12 +29,9 @@ class BatchAgent:
 
     @classmethod
     async def run_with_reduce(cls, **kwargs: Any) -> tuple[list[AgentResult], Any]:
-        """Run batch agents, then run a reduce agent that sees all results.
+        """Run batch agents then a reduce agent that sees all results.
 
         Returns (individual_results, reduce_output).
-
-        The reduce agent uses the same multi-turn loop and tool support as map agents
-        (Drift 9 fix — previously used a one-shot backend.generate() call).
         """
         reduce_prompt_template = kwargs.pop("reduce", None)
         reduce_schema = kwargs.pop("reduce_schema", None)
@@ -49,18 +47,12 @@ class BatchAgent:
         all_outputs = []
         for r in results:
             if r.ok:
-                output = r.output
-                if hasattr(output, "model_dump"):
-                    output = output.model_dump()
-                elif hasattr(output, "dict"):
-                    output = output.dict()
-                all_outputs.append({"status": "ok", "index": r.index, "output": output})
+                all_outputs.append({"status": "ok", "index": r.index,
+                                    "output": to_jsonable(r.output)})
             else:
-                all_outputs.append({
-                    "status": "error",
-                    "index": r.index,
-                    "error": {"type": r.error.type, "message": r.error.message},
-                })
+                all_outputs.append({"status": "error", "index": r.index,
+                                    "error": {"type": r.error.type,
+                                              "message": r.error.message}})
 
         reduce_text = reduce_prompt_template.format(n=len(results))
         results_json = json.dumps(all_outputs, default=str, ensure_ascii=False)
@@ -68,25 +60,13 @@ class BatchAgent:
 
         # Build schema-injected prefix for the reduce agent
         reduce_prefix = spec.system_prompt or ""
-        if reduce_schema:
-            schema_dict: dict[str, Any] | None = None
-            if hasattr(reduce_schema, "model_json_schema"):
-                schema_dict = reduce_schema.model_json_schema()
-            elif hasattr(reduce_schema, "schema"):
-                schema_dict = reduce_schema.schema()
-            elif isinstance(reduce_schema, dict):
-                schema_dict = reduce_schema
-            if schema_dict:
-                reduce_prefix = (
-                    reduce_prefix + f"\n\n{SCHEMA_INSTRUCTION}\n"
-                    f"Schema:\n{json.dumps(schema_dict)}"
-                ).strip()
+        schema_dict = extract_schema(reduce_schema)
+        if schema_dict:
+            reduce_prefix = (
+                reduce_prefix + f"\n\n{SCHEMA_INSTRUCTION}\n"
+                f"Schema:\n{json.dumps(schema_dict)}"
+            ).strip()
 
-        reduce_shared = SharedContext(prefix=reduce_prefix)
-
-        # Drift 9 fix: run reduce through the full WaveScheduler multi-turn loop
-        # Pass results as an input variable rather than embedding in task to avoid
-        # format() interpreting JSON keys as template variables.
         reduce_spec = BatchSpec(
             task="{reduce_prompt}",
             inputs=[{"reduce_prompt": full_reduce_prompt}],
@@ -101,7 +81,7 @@ class BatchAgent:
             timeout_per_agent=spec.timeout_per_agent,
             timeout_per_turn=spec.timeout_per_turn,
             timeout_per_tool=spec.timeout_per_tool,
-            no_hoist=True,  # don't auto-hoist the single input
+            no_hoist=True,
         )
         reduce_scheduler = cls._scheduler(reduce_spec, backend)
         reduce_results = await reduce_scheduler.run()

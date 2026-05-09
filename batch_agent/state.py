@@ -7,6 +7,7 @@ from enum import Enum
 from typing import Any
 
 from .spec import AgentError, Message, ToolCall, ToolResult
+from .utils import p75
 
 
 class AgentStatus(str, Enum):
@@ -55,19 +56,11 @@ class AgentState:
 
     def p75_turn_latency(self) -> float | None:
         """Return P75 generate latency, or None if insufficient data."""
-        if not self.historical_turn_latencies:
-            return None
-        data = sorted(self.historical_turn_latencies)
-        idx = int(len(data) * 0.75)
-        return data[min(idx, len(data) - 1)]
+        return p75(self.historical_turn_latencies)
 
     def p75_tool_wait(self) -> float | None:
         """Return P75 tool-wait duration, or None if insufficient data."""
-        if not self.tool_wait_durations:
-            return None
-        data = sorted(self.tool_wait_durations)
-        idx = int(len(data) * 0.75)
-        return data[min(idx, len(data) - 1)]
+        return p75(self.tool_wait_durations)
 
 
 class InMemoryStateStore:

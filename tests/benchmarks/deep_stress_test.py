@@ -9,7 +9,6 @@ LOGS line 187  : KVFlow prefetch accuracy ≥80%
 LOGS line 209  : TokenDance compression ratio 18.76x
 LOGS line 230  : Distributed failover ≤5% agent loss
 LOGS line 244  : Tool dedup benchmark 100x (1000→10 reads)
-LOGS lines 395–397 : Fair-comparison LOC still shows 68 (already fixed to 87 in benchmark)
 LOGS line 402  : D-equiv = 87 LOC, E = 9 LOC, reduction 9.7x
 LOGS line 400  : E N=200 mock wall-clock 3.48s, under 10s
 LOGS line 401  : Tool dedup 50x (200→4 reads, cacheable=False)
@@ -22,29 +21,13 @@ import asyncio
 import json
 import math
 import statistics
-import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from _common import PASS, FAIL, WARN, close, report, run_pytest, write_results, _REPO_ROOT
 
-PASS = "  [PASS]"
-FAIL = "  [FAIL]"
-WARN = "  [WARN]"
 REPS = 5  # number of repetitions for each claim
-
-
-def report(label: str, ok: bool, detail: str = "") -> bool:
-    tag = PASS if ok else FAIL
-    print(f"{tag} {label}" + (f"  ({detail})" if detail else ""))
-    return ok
-
-
-def close(a: float, b: float, pct: float = 0.10) -> bool:
-    """True if a is within ±pct of b."""
-    return abs(a - b) <= b * pct
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -119,16 +102,9 @@ async def check_kvflow_prefetch() -> dict[str, Any]:
     print("\n══ CLAIM: KVFlow prefetch accuracy ≥80% (LOGS line 187) ══")
     rates = []
     for rep in range(REPS):
-        result = subprocess.run(
-            ["python3", "-m", "pytest",
-             "tests/integration/test_prefetch_accuracy.py", "-q", "--tb=short"],
-            capture_output=True, text=True,
-            cwd=str(Path(__file__).parent.parent.parent)
-        )
-        passed = result.returncode == 0
+        passed, last = run_pytest("tests/integration/test_prefetch_accuracy.py")
         rates.append(passed)
-        report(f"Rep {rep+1}: test_prefetch_accuracy passes", passed,
-               result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "no output")
+        report(f"Rep {rep+1}: test_prefetch_accuracy passes", passed, last)
 
     report("KVFlow prefetch passes all 5 runs", all(rates),
            f"pass_count={sum(rates)}/5")
@@ -190,15 +166,8 @@ async def check_distributed_failover() -> dict[str, Any]:
     print("\n══ CLAIM: Distributed failover ≤5% loss (LOGS line 230) ══")
     rates = []
     for rep in range(REPS):
-        result = subprocess.run(
-            ["python3", "-m", "pytest",
-             "tests/integration/test_distributed_scheduler.py", "-q", "--tb=short"],
-            capture_output=True, text=True,
-            cwd=str(Path(__file__).parent.parent.parent)
-        )
-        passed = result.returncode == 0
+        passed, last = run_pytest("tests/integration/test_distributed_scheduler.py")
         rates.append(passed)
-        last = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "no output"
         report(f"Rep {rep+1}: distributed failover test passes", passed, last)
 
     report("Distributed failover passes all 5 runs", all(rates),
@@ -418,14 +387,9 @@ async def check_priority_semaphore() -> dict[str, Any]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def check_full_pytest() -> dict[str, Any]:
-    print("\n══ CLAIM: Full pytest suite 62 passed ══")
-    result = subprocess.run(
-        ["python3", "-m", "pytest", "-q", "--tb=short"],
-        capture_output=True, text=True,
-        cwd=str(Path(__file__).parent.parent.parent)
-    )
-    last = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "no output"
-    passed = result.returncode == 0 and "failed" not in last
+    print("\n══ CLAIM: Full pytest suite passes ══")
+    passed, last = run_pytest("tests/")
+    passed = passed and "failed" not in last
     report("pytest full suite passes", passed, last)
     return {"passed": passed, "summary": last}
 
@@ -486,8 +450,8 @@ async def main():
     else:
         print("  SOME CHECKS FAILED — see above")
 
-    # Update the results JSON
-    summary = {
+    out_path = "tests/benchmarks/results/stress_test_verification/results.json"
+    write_results(out_path, {
         "reps": REPS,
         "all_pass": all_pass,
         "details": {
@@ -506,11 +470,8 @@ async def main():
             "priority_semaphore_correct": rpri["correct"],
             "pytest_passed": rpy["passed"],
         }
-    }
-    out = Path("tests/benchmarks/results/stress_test_verification/results.json")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(summary, indent=2, sort_keys=True))
-    print(f"\n  Results written to {out}")
+    })
+    print(f"\n  Results written to {out_path}")
 
 
 if __name__ == "__main__":

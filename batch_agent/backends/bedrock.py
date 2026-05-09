@@ -44,7 +44,6 @@ LOGS.md references:
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import time
@@ -53,7 +52,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 from . import BackendAdapter, BackendResponse, ParsedToolCall
-from batch_agent.spec import AgentJob, Message, SharedContext
+from ..spec import AgentJob, Message, SharedContext
+from ..utils import INTERNAL_HTTP_TIMEOUT, NO_API_KEY, DEFAULT_MAX_TOKENS, prefix_hash
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +182,7 @@ class BedrockBackend(BackendAdapter):
         """
         if not shared.prefix:
             return None
-        return hashlib.sha256(shared.prefix.encode("utf-8")).hexdigest()
+        return prefix_hash(shared.prefix)
 
     async def generate(
         self,
@@ -222,7 +222,7 @@ class BedrockBackend(BackendAdapter):
             payload["toolConfig"] = {"tools": _convert_tools_to_bedrock(tools)}
 
         # Inference configuration
-        payload["inferenceConfig"] = {"maxTokens": 4096}
+        payload["inferenceConfig"] = {"maxTokens": DEFAULT_MAX_TOKENS}
         self.request_payloads.append(payload)
 
         # Try streaming first; fall back to non-streaming on error

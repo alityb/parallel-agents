@@ -4,8 +4,10 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlparse
 
-from batch_agent.spec import AgentJob, Message, SharedContext, ToolCall
+from ..spec import AgentJob, Message, SharedContext, ToolCall
+from ..utils import NO_API_KEY, PREFIX_WARM_TIMEOUT, prefix_hash
 
 logger = logging.getLogger(__name__)
 
@@ -58,29 +60,21 @@ class BackendAdapter(ABC):
     async def get_cache_metrics(self) -> dict[str, float]:
         """Return cache/utilization metrics for adaptive concurrency.
 
-        Returns a dict with optional keys:
-          prefix_cache_hit_rate  [0.0, 1.0]
-          gpu_utilization        [0.0, 1.0]
-
-        Default: empty dict (no metrics available — API-mode adapters).
-        vLLM override polls /v1/metrics (Prometheus text format).
+        Keys: ``prefix_cache_hit_rate`` [0.0, 1.0], ``gpu_utilization`` [0.0, 1.0].
+        Default: empty dict (no metrics — API-mode adapters).
         """
         return {}
 
     async def get_queue_metrics(self) -> dict[str, Any]:
-        """Return backend queue depth metrics for backpressure dispatch.
+        """Return backend queue depth for backpressure dispatch.
 
-        Returns a dict with optional keys:
-          requests_waiting  int  — requests queued but not yet executing
-          requests_running  int  — requests currently being processed
-
+        Keys: ``requests_waiting`` int, ``requests_running`` int.
         Default: {} (no queue depth visible — dispatch proceeds freely).
-        vLLM override parses /metrics for vllm:num_requests_waiting/running.
         """
         return {}
 
     async def send_prefetch_hints(self, hints: list[Any]) -> None:
-        """Send KVFlow prefetch hints. Managed/API backends no-op by default."""
+        """Send KVFlow prefetch hints. API/managed backends no-op by default."""
         return None
 
     def backend_capabilities(self) -> dict[str, Any]:
@@ -91,6 +85,22 @@ class BackendAdapter(ABC):
             "max_safe_concurrent": 1,
         }
 
+
+# ── URL parsing helper shared by vLLM / SGLang / OpenAI adapters ──────────────
+
+def _http_url_from_scheme(url: str, scheme: str) -> str:
+    """Convert ``scheme://host:port`` to ``http://host:port``.
+
+    E.g. ``vllm://localhost:8000`` → ``http://localhost:8000``.
+    Falls back to ``https://netloc`` for ``openai://`` style URLs.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme == scheme:
+        return f"http://{parsed.netloc}"
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+# ── Backend factory ────────────────────────────────────────────────────────────
 
 def backend_from_url(url: str) -> BackendAdapter:
     if url.startswith("anthropic://"):

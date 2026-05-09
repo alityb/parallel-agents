@@ -181,7 +181,13 @@ class WaveScheduler:
         await self._dispatch_token.put(None)
 
     async def _execute(self, job: AgentJob) -> AgentResult:
-        state = self.states.create(job.job_id)
+        state = None
+        if self._checkpoint:
+            state = self._checkpoint.load_state(job.job_id)
+        if state is None:
+            state = self.states.create(job.job_id)
+        else:
+            self.states.save(state)
         state.set_status(AgentStatus.PREFLIGHT)
         # Store the shared prefix kv_key on agent state (Phase 3A)
         state.kv_key = self._shared_kv_key
@@ -229,13 +235,17 @@ class WaveScheduler:
         - Releases a dispatch token on first TOOL_WAIT so a new PENDING agent starts.
         """
         max_turns = self.plan.spec.max_turns
-        state.messages = [Message(role="user", content=job.prompt)]
+        if not state.messages:
+            state.messages = [Message(role="user", content=job.prompt)]
+            start_turn = 0
+        else:
+            start_turn = state.turn
         state.set_status(AgentStatus.RUNNING)
 
         response: BackendResponse | None = None
         dispatch_released = False  # have we already released a dispatch token?
 
-        for turn in range(max_turns):
+        for turn in range(start_turn, max_turns):
             state.turn = turn + 1
             # priority = turns_remaining (lower = higher priority)
             priority = float(max_turns - state.turn)
@@ -271,10 +281,6 @@ class WaveScheduler:
             state.record_turn_latency(generate_elapsed)
             self.metrics.record_turn(job.job_id, generate_elapsed)
             logger.debug("[%s] turn=%d generate=%.3fs", job.job_id, state.turn, generate_elapsed)
-
-            # Checkpoint after every turn (Stub 5 / crash recovery)
-            if self._checkpoint:
-                self._checkpoint.save_state(state)
 
             # Append assistant response to conversation history
             if response.raw and "content" in response.raw:
@@ -331,6 +337,10 @@ class WaveScheduler:
                 )
                 state.tool_calls_pending = []
                 state.set_status(AgentStatus.RUNNING)
+
+                # Save only after a complete turn is durable: user + assistant + tool result.
+                if self._checkpoint:
+                    self._checkpoint.save_state(state)
 
                 # Compact old tool results after every COMPACT_INTERVAL turns
                 if should_compact(state.turn):

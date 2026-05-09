@@ -159,3 +159,18 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Bedrock prompt caching limitation: Claude models on Bedrock support `cachePoint`; Llama/Titan models do not, so the adapter checks `_supports_prompt_caching(model_id)` before injecting cache points.
 - Bedrock streaming limitation: Converse streaming support differs by model. The adapter uses `converse_stream()` first and falls back to `converse()` if streaming is unsupported; live verification should pin the exact Bedrock model ID in use.
 - AWS credential note: boto3 reads standard credential chain. For env var setup, prefer `AWS_DEFAULT_REGION=us-east-1` or an explicit backend URL (`bedrock://us-east-1/...`). `AWS_REGION` alone is not sufficient in all boto3 contexts. Temporary/SSO/MFA credentials also require `AWS_SESSION_TOKEN`.
+
+### Audit Step 3 test gap closure — 2026-05-09
+
+- Added `tests/unit/test_audit_gap_coverage.py` covering all 11 audit test gaps in a single focused suite.
+- Covered compaction: verifies turn-3 compaction shortens old tool-result context and emits a `[COMPACTED]` marker.
+- Covered checkpoint resume: added `CheckpointStore.load_state()` and scheduler resume from persisted in-progress `AgentState`; fixed a real bug where state was checkpointed too early in the turn before assistant/tool-result messages were durable.
+- Covered SQL batching: 30 concurrent calls to a batchable tool now produce one `_batch_handler` invocation through `ToolPool`.
+- Covered reduce with partial failures: reduce now receives both successful outputs and structured error objects.
+- Covered retry exhaustion and timeout retry: both return structured `AgentResult` errors instead of raising to the caller.
+- Covered OpenAI-style multi-turn end-to-end through the scheduler.
+- Covered repair edge cases: missing JSON, nested repairable JSON, and schema validation failure.
+- Covered CLI smoke dispatch using a mocked `BatchAgent.run`.
+- Covered async `on_result` callback behavior.
+- Covered dynamic priority ordering via `PrioritySemaphore`: a near-complete agent with lower turns remaining is served before a fresh job.
+- Full pytest suite after these changes: 48 passed.

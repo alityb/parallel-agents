@@ -122,6 +122,37 @@ class CheckpointStore:
             attempts=row[4],
         )
 
+    def load_state(self, job_id: str) -> AgentState | None:
+        """Load the last checkpointed in-progress agent state."""
+        cursor = self._conn.execute(
+            """
+            SELECT job_id, status, turn, messages, output, error, retry_count, created_at, last_updated
+            FROM agent_states WHERE job_id = ?
+            """,
+            (job_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        messages_raw = json.loads(row[3]) if row[3] else []
+        messages = [Message(role=m["role"], content=m["content"]) for m in messages_raw]
+        output = json.loads(row[4]) if row[4] else None
+        error_dict = json.loads(row[5]) if row[5] else None
+        error = AgentError(**error_dict) if error_dict else None
+
+        return AgentState(
+            job_id=row[0],
+            status=AgentStatus(row[1]),
+            turn=row[2],
+            messages=messages,
+            output=output,
+            error=error,
+            retry_count=row[6],
+            created_at=row[7],
+            last_updated=row[8],
+        )
+
     def close(self) -> None:
         self._conn.close()
 

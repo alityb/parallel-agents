@@ -656,7 +656,8 @@ batch-agent/
 │   │   │   └── diff_cache_engine.py       # DiffCacheEngine subclass
 │   │   ├── sglang.py                      # SGLang + RadixAttention prefetch
 │   │   ├── anthropic.py                   # Anthropic API + cache_control
-│   │   └── openai.py                      # OpenAI API
+│   │   ├── openai.py                      # OpenAI API
+│   │   └── bedrock.py                     # AWS Bedrock Converse API
 │   ├── compaction.py                      # Model-based message compaction
 │   ├── repair.py                          # JSON repair + schema validation
 │   ├── metrics.py                         # Prometheus + Grafana
@@ -705,6 +706,14 @@ results = await BatchAgent.run(
     inputs=[{"text": t} for t in texts],
     model="claude-sonnet-4-20250514",
     backend="anthropic://",
+)
+
+# AWS Bedrock Converse API (uses standard boto3 credential chain)
+results = await BatchAgent.run(
+    task="Summarize: {text}",
+    inputs=[{"text": t} for t in texts],
+    model="anthropic.claude-sonnet-4-20250514-v1:0",
+    backend="bedrock://us-east-1/anthropic.claude-sonnet-4-5",
 )
 
 # Full control

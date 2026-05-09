@@ -144,3 +144,18 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - **Model-based compaction** — deferred; heuristic truncation works but loses semantic information.
 - **SQL batch_handler protocol** — the `@batchable` annotation exists but actual SQL execution requires user-implemented batch handlers.
 - **Cost comparison** — cannot compute cost-per-task without live runs.
+
+### Audit Step 1 and Bedrock backend — 2026-05-09
+
+- Fixed Anthropic prompt caching header bug: `anthropic-beta: prompt-caching-2024-07-31` is now sent with `cache_control` requests.
+- Added KVFlow-required `AgentState` fields: `estimated_next_activation`, `steps_to_execution`, `predicted_tool_sequence`, `historical_turn_latencies`, plus `tool_wait_durations`.
+- Reworked scheduler concurrency around a priority semaphore: inference slots are acquired by dynamic turns-remaining priority, and PENDING agents are dispatched when existing agents enter `TOOL_WAIT` or `COMPLETE`.
+- Added adaptive concurrency polling via backend `get_cache_metrics()`; vLLM parses Prometheus metrics when available.
+- Added model-based compaction interface, but live model compaction is still blocked without a separate low-priority small-model endpoint. The heuristic fallback remains explicit and logged rather than silent.
+- Added vLLM prefix pinning call to `/internal/pin_blocks`. Hardware/server blocker: the actual no-evict behavior requires installing the vLLM BlockManager patch on a running vLLM 0.6.x server.
+- Wired SQL `BatchCollector` into `ToolPool`; batchable tools now route through the collector.
+- Added AWS Bedrock backend using boto3 standard credential chain and Bedrock Converse/ConverseStream APIs.
+- Bedrock limitation: Bedrock does not expose KV cache internals. `warm_prefix()` returns a stable prefix hash for internal tracking, but there is no KV prefill or pinning API; prefix caching degrades to Bedrock’s managed `cachePoint` behavior, same class of limitation as Anthropic API mode.
+- Bedrock prompt caching limitation: Claude models on Bedrock support `cachePoint`; Llama/Titan models do not, so the adapter checks `_supports_prompt_caching(model_id)` before injecting cache points.
+- Bedrock streaming limitation: Converse streaming support differs by model. The adapter uses `converse_stream()` first and falls back to `converse()` if streaming is unsupported; live verification should pin the exact Bedrock model ID in use.
+- AWS credential note: boto3 reads standard credential chain. For env var setup, prefer `AWS_DEFAULT_REGION=us-east-1` or an explicit backend URL (`bedrock://us-east-1/...`). `AWS_REGION` alone is not sufficient in all boto3 contexts. Temporary/SSO/MFA credentials also require `AWS_SESSION_TOKEN`.

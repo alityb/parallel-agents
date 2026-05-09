@@ -1,0 +1,460 @@
+"""AWS Bedrock Converse backend adapter.
+
+Uses the Bedrock Converse API via boto3 (both converse_stream for real calls
+and converse for test/fallback).  Credentials come entirely from the standard
+boto3 credential chain — no hardcoded keys.
+
+URL format:
+  bedrock://us-east-1/anthropic.claude-sonnet-4-5   explicit region + model override
+  bedrock://us-east-1                                explicit region, model from BatchSpec
+  bedrock://anthropic.claude-sonnet-4-5              model override, region from AWS config
+  bedrock://                                         region and model from AWS config / BatchSpec
+
+The model parameter passed to generate() always wins over the URL-parsed model.
+
+Prompt caching:
+  Bedrock supports Anthropic prompt caching via cachePoint blocks in the Converse
+  system array.  Only Claude (anthropic.*) models support this; all others silently
+  skip the cachePoint injection.
+
+Streaming:
+  converse_stream is used by default.  boto3 is synchronous, so stream iteration
+  runs in asyncio.to_thread().  converse_stream support on Bedrock depends on the
+  model; Claude and Llama 3.x are supported.  Titan and some older models are not —
+  the adapter falls back to converse() if converse_stream raises an unsupported error.
+
+Tool calling:
+  Bedrock Converse uses camelCase keys and a different nesting than Anthropic native:
+    toolUse.toolUseId  (vs tool_use.id)
+    toolUse.input      (dict, already parsed — not a JSON string)
+    Bedrock streaming delivers input as a concatenated JSON string across deltas.
+
+KV cache control:
+  Bedrock is a managed service.  warm_prefix is a no-op (no /v1/completions endpoint).
+  Prefix caching effectiveness depends on Bedrock's internal implementation with cache
+  points; there is no way to pin blocks or query hit rates.  get_cache_metrics always
+  returns {} for Bedrock backends.
+
+LOGS.md references:
+  - Bedrock prompt caching (Claude on Bedrock) added ~2024-07.  Llama/Titan: not supported.
+  - converse_stream: Claude 3/3.5, Llama 3.x supported; older Titan not.
+  - warm_prefix and KV pin: not applicable to managed Bedrock — same limitation as
+    the Anthropic API adapter (degraded mode per spec §3.4.3).
+"""
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import logging
+from typing import Any
+from urllib.parse import urlparse
+
+from . import BackendAdapter, BackendResponse, ParsedToolCall
+from batch_agent.spec import AgentJob, Message, SharedContext
+
+logger = logging.getLogger(__name__)
+
+
+# ── model-capability tables ────────────────────────────────────────────────────
+
+def _supports_prompt_caching(model_id: str) -> bool:
+    """Only anthropic.claude-* models support cachePoint on Bedrock."""
+    vendor = model_id.split(".")[0].lower() if "." in model_id else ""
+    return vendor == "anthropic"
+
+
+def _supports_streaming(model_id: str) -> bool:
+    """converse_stream is supported for most modern Bedrock models.
+
+    Conservative allow-list: claude, llama3.x, mistral.
+    Falls back to converse() on any error anyway.
+    """
+    vendor = model_id.split(".")[0].lower() if "." in model_id else ""
+    return vendor in {"anthropic", "meta", "mistral", "amazon"}
+
+
+# ── adapter ────────────────────────────────────────────────────────────────────
+
+class BedrockBackend(BackendAdapter):
+
+    def __init__(
+        self,
+        region: str | None = None,
+        model_id_override: str | None = None,
+        *,
+        _client_factory: Any = None,  # injectable for testing
+    ) -> None:
+        self.region = region
+        self.model_id_override = model_id_override
+        self._client_factory = _client_factory  # if None, uses boto3 default chain
+
+    @classmethod
+    def from_url(cls, url: str) -> "BedrockBackend":
+        """Parse bedrock://[region/][model-id] URL.
+
+        Heuristic: if the first path component contains a dot it is a model ID
+        (e.g. "anthropic.claude-sonnet-4-5"); otherwise it is a region
+        (e.g. "us-east-1").
+        """
+        parsed = urlparse(url)
+        netloc = parsed.netloc  # may be "us-east-1" or "anthropic.claude-x"
+        path = parsed.path.lstrip("/")  # may be empty or "anthropic.claude-x"
+
+        region: str | None = None
+        model_id_override: str | None = None
+
+        if netloc and path:
+            # bedrock://region/model-id
+            region = netloc
+            model_id_override = path
+        elif netloc and "." in netloc:
+            # bedrock://anthropic.claude-x  — no region, model in netloc
+            model_id_override = netloc
+        elif netloc:
+            # bedrock://us-east-1  — just a region
+            region = netloc
+        # else: bedrock:// — use defaults from env/config
+
+        return cls(region=region, model_id_override=model_id_override)
+
+    # ── BackendAdapter interface ───────────────────────────────────────────────
+
+    async def warm_prefix(self, shared: SharedContext, model: str) -> str | None:
+        """Bedrock is a managed service — no warm_prefix endpoint.
+
+        Returns a stable hash of the prefix for use as kv_key (e.g. by KVFlow),
+        but does NOT pre-fill any server-side cache.  Actual cache warming happens
+        implicitly via Bedrock's cachePoint mechanism on the first real call.
+        """
+        if not shared.prefix:
+            return None
+        return hashlib.sha256(shared.prefix.encode("utf-8")).hexdigest()
+
+    async def generate(
+        self,
+        *,
+        shared: SharedContext,
+        job: AgentJob,
+        messages: list[Message] | None = None,
+        model: str,
+        tools: list[dict[str, Any]] | None = None,
+        timeout: float | None = None,
+    ) -> BackendResponse:
+        # Model resolution: explicit call wins over URL override
+        model_id = self.model_id_override if self.model_id_override else model
+
+        client = self._get_client()
+
+        # Build Converse payload
+        payload: dict[str, Any] = {"modelId": model_id}
+
+        # System prompt with optional cachePoint (Claude on Bedrock only)
+        if shared.prefix:
+            system_block: dict[str, Any] = {"text": shared.prefix}
+            if _supports_prompt_caching(model_id):
+                payload["system"] = [system_block, {"cachePoint": {"type": "default"}}]
+            else:
+                payload["system"] = [system_block]
+
+        # Messages
+        if messages is not None:
+            payload["messages"] = _messages_to_bedrock(messages)
+        else:
+            payload["messages"] = [{"role": "user", "content": [{"text": job.prompt}]}]
+
+        # Tool configuration (Anthropic-format schemas → Bedrock toolSpec)
+        if tools:
+            payload["toolConfig"] = {"tools": _convert_tools_to_bedrock(tools)}
+
+        # Inference configuration
+        payload["inferenceConfig"] = {"maxTokens": 4096}
+
+        # Try streaming first; fall back to non-streaming on error
+        try:
+            if _supports_streaming(model_id):
+                text, tool_calls, stop_reason, raw = await asyncio.wait_for(
+                    asyncio.to_thread(_sync_stream, client, payload),
+                    timeout=timeout,
+                )
+            else:
+                text, tool_calls, stop_reason, raw = await asyncio.wait_for(
+                    asyncio.to_thread(_sync_converse, client, payload),
+                    timeout=timeout,
+                )
+        except Exception as exc:
+            # If streaming fails (model doesn't support it), fall back to converse
+            if "stream" in str(exc).lower() or "unsupported" in str(exc).lower():
+                logger.debug(
+                    "converse_stream failed (%s), falling back to converse()", exc
+                )
+                text, tool_calls, stop_reason, raw = await asyncio.wait_for(
+                    asyncio.to_thread(_sync_converse, client, payload),
+                    timeout=timeout,
+                )
+            else:
+                raise
+
+        return BackendResponse(
+            content=text,
+            raw=raw,
+            tool_calls=tool_calls,
+            stop_reason=stop_reason,
+        )
+
+    async def get_cache_metrics(self) -> dict[str, float]:
+        """Bedrock does not expose KV cache internals — always empty."""
+        return {}
+
+    async def send_prefetch_hints(self, hints: list[dict[str, Any]]) -> None:
+        """No-op: Bedrock is a managed service with no KV prefetch API."""
+        logger.debug("send_prefetch_hints: no-op for Bedrock backend (%d hints ignored)", len(hints))
+
+    # ── helpers ────────────────────────────────────────────────────────────────
+
+    def _get_client(self) -> Any:
+        if self._client_factory is not None:
+            return self._client_factory()
+        try:
+            import boto3
+        except ImportError as exc:
+            raise RuntimeError(
+                "boto3 is required for the Bedrock backend: pip install boto3"
+            ) from exc
+        kwargs: dict[str, Any] = {}
+        if self.region:
+            kwargs["region_name"] = self.region
+        return boto3.client("bedrock-runtime", **kwargs)
+
+
+# ── sync helpers (run inside asyncio.to_thread) ────────────────────────────────
+
+def _sync_stream(
+    client: Any, payload: dict[str, Any]
+) -> tuple[str, list[ParsedToolCall], str, dict[str, Any]]:
+    """Run converse_stream and collect the full response."""
+    response = client.converse_stream(**payload)
+    stream = response.get("stream", [])
+
+    texts: list[str] = []
+    tool_blocks: dict[int, dict[str, Any]] = {}   # block index → accumulator
+    stop_reason = "end_turn"
+    last_event: dict[str, Any] = {}
+
+    for event in stream:
+        last_event = event
+
+        if "contentBlockStart" in event:
+            data = event["contentBlockStart"]
+            idx: int = data["contentBlockIndex"]
+            start = data.get("start", {})
+            if "toolUse" in start:
+                tu = start["toolUse"]
+                tool_blocks[idx] = {
+                    "toolUseId": tu.get("toolUseId", ""),
+                    "name": tu.get("name", ""),
+                    "input_json": "",
+                }
+
+        elif "contentBlockDelta" in event:
+            data = event["contentBlockDelta"]
+            idx = data["contentBlockIndex"]
+            delta = data.get("delta", {})
+            if "text" in delta:
+                texts.append(delta["text"])
+            elif "toolUse" in delta and idx in tool_blocks:
+                tool_blocks[idx]["input_json"] += delta["toolUse"].get("input", "")
+
+        elif "messageStop" in event:
+            stop_reason = event["messageStop"].get("stopReason", "end_turn")
+
+    text = "".join(texts)
+    tool_calls = _parse_bedrock_tool_blocks(tool_blocks)
+    # Normalize Bedrock stop reasons to match our is_final convention
+    if stop_reason == "tool_use":
+        normalized_stop = "tool_use"
+    else:
+        normalized_stop = stop_reason  # "end_turn", "max_tokens", "stop_sequence"
+
+    return text, tool_calls, normalized_stop, {"last_event": last_event}
+
+
+def _sync_converse(
+    client: Any, payload: dict[str, Any]
+) -> tuple[str, list[ParsedToolCall], str, dict[str, Any]]:
+    """Run converse (non-streaming) and return the full response."""
+    response = client.converse(**payload)
+    output = response.get("output", {})
+    message = output.get("message", {})
+    content_blocks: list[dict[str, Any]] = message.get("content", [])
+    stop_reason = response.get("stopReason", "end_turn")
+
+    texts: list[str] = []
+    tool_blocks: dict[int, dict[str, Any]] = {}
+
+    for idx, block in enumerate(content_blocks):
+        if "text" in block:
+            texts.append(block["text"])
+        elif "toolUse" in block:
+            tu = block["toolUse"]
+            raw_input = tu.get("input", {})
+            # converse() returns input as a dict (already parsed); stream delivers JSON string
+            tool_blocks[idx] = {
+                "toolUseId": tu.get("toolUseId", ""),
+                "name": tu.get("name", ""),
+                "input_json": json.dumps(raw_input) if isinstance(raw_input, dict) else str(raw_input),
+            }
+
+    text = "".join(texts)
+    if stop_reason == "tool_use":
+        normalized_stop = "tool_use"
+    else:
+        normalized_stop = stop_reason
+
+    return text, _parse_bedrock_tool_blocks(tool_blocks), normalized_stop, response
+
+
+def _parse_bedrock_tool_blocks(
+    tool_blocks: dict[int, dict[str, Any]]
+) -> list[ParsedToolCall]:
+    """Convert accumulated Bedrock toolUse blocks → ParsedToolCall list.
+
+    Does NOT skip malformed blocks — logs them and returns with error=True.
+    """
+    tool_calls: list[ParsedToolCall] = []
+
+    for idx in sorted(tool_blocks.keys()):
+        tb = tool_blocks[idx]
+        tool_id = tb.get("toolUseId", "")
+        name = tb.get("name", "")
+        input_json = tb.get("input_json", "")
+
+        if not tool_id:
+            logger.warning("Bedrock toolUse block at index %d missing toolUseId", idx)
+            tool_calls.append(ParsedToolCall(
+                id="unknown", name=name or "unknown", args={},
+                error=True, error_message="toolUse missing toolUseId",
+            ))
+            continue
+
+        if not name:
+            logger.warning("Bedrock toolUse block at index %d missing name", idx)
+            tool_calls.append(ParsedToolCall(
+                id=tool_id, name="unknown", args={},
+                error=True, error_message="toolUse missing name",
+            ))
+            continue
+
+        try:
+            args = json.loads(input_json) if input_json else {}
+        except json.JSONDecodeError as exc:
+            logger.warning("Bedrock toolUse '%s' has malformed input JSON: %s", name, exc)
+            tool_calls.append(ParsedToolCall(
+                id=tool_id, name=name, args={},
+                error=True, error_message=f"malformed input JSON: {exc}",
+            ))
+            continue
+
+        if not isinstance(args, dict):
+            logger.warning(
+                "Bedrock toolUse '%s' input is %s, expected dict", name, type(args).__name__
+            )
+            tool_calls.append(ParsedToolCall(
+                id=tool_id, name=name, args={},
+                error=True, error_message=f"input is {type(args).__name__}, expected dict",
+            ))
+            continue
+
+        tool_calls.append(ParsedToolCall(id=tool_id, name=name, args=args, error=False))
+
+    return tool_calls
+
+
+# ── message format conversion ──────────────────────────────────────────────────
+
+def _messages_to_bedrock(messages: list[Message]) -> list[dict[str, Any]]:
+    """Convert internal Message objects to Bedrock Converse message format."""
+    result: list[dict[str, Any]] = []
+
+    for msg in messages:
+        if msg.role == "user":
+            result.append({"role": "user", "content": [{"text": msg.content}]})
+
+        elif msg.role == "assistant":
+            result.append({"role": "assistant", "content": [{"text": msg.content}]})
+
+        elif msg.role == "assistant_raw":
+            # JSON-encoded list of Anthropic-format content blocks
+            try:
+                blocks: list[dict[str, Any]] = json.loads(msg.content)
+            except (json.JSONDecodeError, TypeError):
+                result.append({"role": "assistant", "content": [{"text": msg.content}]})
+                continue
+
+            bedrock_content: list[dict[str, Any]] = []
+            for block in blocks:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "text":
+                    bedrock_content.append({"text": block.get("text", "")})
+                elif block.get("type") == "tool_use":
+                    bedrock_content.append({
+                        "toolUse": {
+                            "toolUseId": block.get("id", ""),
+                            "name": block.get("name", ""),
+                            "input": block.get("input", {}),
+                        }
+                    })
+            if bedrock_content:
+                result.append({"role": "assistant", "content": bedrock_content})
+
+        elif msg.role == "tool_result":
+            # JSON-encoded list of Anthropic tool_result blocks → Bedrock toolResult
+            try:
+                blocks_raw: list[dict[str, Any]] = json.loads(msg.content)
+            except (json.JSONDecodeError, TypeError):
+                result.append({"role": "user", "content": [{"text": msg.content}]})
+                continue
+
+            bedrock_tool_results: list[dict[str, Any]] = []
+            for block in blocks_raw:
+                if not isinstance(block, dict):
+                    continue
+                tool_use_id = block.get("tool_use_id", "unknown")
+                content_text = block.get("content", "")
+                is_error = block.get("is_error", False)
+
+                tr: dict[str, Any] = {
+                    "toolUseId": tool_use_id,
+                    "content": [{"text": content_text if isinstance(content_text, str) else json.dumps(content_text)}],
+                }
+                if is_error:
+                    tr["status"] = "error"
+                bedrock_tool_results.append({"toolResult": tr})
+
+            if bedrock_tool_results:
+                result.append({"role": "user", "content": bedrock_tool_results})
+
+    return result
+
+
+def _convert_tools_to_bedrock(
+    anthropic_tools: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Convert Anthropic-format tool schemas to Bedrock toolSpec format.
+
+    Anthropic:  {name, description, input_schema: {type, properties, required}}
+    Bedrock:    {toolSpec: {name, description, inputSchema: {json: {type, properties, required}}}}
+    """
+    bedrock_tools: list[dict[str, Any]] = []
+    for tool in anthropic_tools:
+        bedrock_tools.append({
+            "toolSpec": {
+                "name": tool["name"],
+                "description": tool.get("description", ""),
+                "inputSchema": {
+                    "json": tool.get("input_schema", {"type": "object", "properties": {}})
+                },
+            }
+        })
+    return bedrock_tools

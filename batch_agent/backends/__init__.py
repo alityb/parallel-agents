@@ -70,18 +70,17 @@ class BackendAdapter(ABC):
 def backend_from_url(url: str) -> BackendAdapter:
     if url.startswith("anthropic://"):
         from .anthropic import AnthropicBackend
-
         return AnthropicBackend()
     if url.startswith("openai://"):
         from .openai import OpenAIBackend
-
         return OpenAIBackend.from_url(url)
     if url.startswith("vllm://"):
         from .vllm import VLLMBackend
-
         return VLLMBackend.from_url(url)
     if url.startswith("sglang://"):
         from .sglang import SGLangBackend
-
         return SGLangBackend.from_url(url)
+    if url.startswith("bedrock://"):
+        from .bedrock import BedrockBackend
+        return BedrockBackend.from_url(url)
     raise ValueError(f"unsupported backend URL: {url}")

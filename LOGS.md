@@ -220,3 +220,12 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Added stream append (`xadd`) on successful writes to model Redis Streams append-only state history.
 - Added `tests/integration/test_distributed.py`: two nodes share a mock Redis, exactly one wins lease, stale write is rejected, and another node can acquire after TTL expiry.
 - Full pytest suite after distributed state primitives: 55 passed.
+
+### Phase 4 distributed wave scheduler primitives — 2026-05-09
+
+- Added `batch_agent/distributed.py` with `ConsistentHashRing` and `DistributedWaveScheduler`.
+- Consistent hashing assigns agents to nodes deterministically with virtual replicas.
+- Distributed scheduler claims Redis-style leases before processing jobs, writes versioned state, and releases leases on completion.
+- Failover path: surviving node reruns with `failover=True`, waits for expired leases, then claims and completes unfinished jobs from Redis state.
+- Added `tests/integration/test_distributed_scheduler.py`: starts two in-process nodes over shared mock Redis, kills node-a after 30 completions, lets leases expire, and verifies node-b completes ≥95/100 jobs (≤5% loss target).
+- Full pytest suite after distributed scheduler primitives: 56 passed.

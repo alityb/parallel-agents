@@ -54,6 +54,18 @@ class BackendAdapter(ABC):
     async def warm_prefix(self, shared: SharedContext, model: str) -> str | None:
         return None
 
+    async def get_cache_metrics(self) -> dict[str, float]:
+        """Return cache/utilization metrics for adaptive concurrency.
+
+        Returns a dict with optional keys:
+          prefix_cache_hit_rate  [0.0, 1.0]
+          gpu_utilization        [0.0, 1.0]
+
+        Default: empty dict (no metrics available — API-mode adapters).
+        vLLM override polls /v1/metrics (Prometheus text format).
+        """
+        return {}
+
 
 def backend_from_url(url: str) -> BackendAdapter:
     if url.startswith("anthropic://"):

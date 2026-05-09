@@ -3,11 +3,17 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import time
 from collections import OrderedDict
 from typing import Any
 
 from . import Tool, ToolDefinition
+from .sql import BatchCollector
+
+logger = logging.getLogger(__name__)
+
+_batch_collector = BatchCollector()
 
 
 class ToolPool:
@@ -17,11 +23,17 @@ class ToolPool:
         self._inflight: dict[str, asyncio.Future[Any]] = {}
         self._cache: OrderedDict[str, tuple[float, Any]] = OrderedDict()
         self._limiters: dict[str, _TokenBucket] = {}
+        # Per-tool P50/P75/P99 latency tracking for KVFlow Advisor
+        self._latencies: dict[str, list[float]] = {}
 
     async def call(self, tool: str | ToolDefinition, args: dict[str, Any] | None = None) -> Any:
         args = args or {}
         definition = self._resolve(tool)
         key = self._key(definition, args)
+
+        # Route batchable tools through BatchCollector (Drift 7)
+        if definition.key_arg and definition.batch_query:
+            return await _batch_collector.call_or_batch(definition, args)
 
         if definition.cacheable:
             cached = self._get_cached(key)
@@ -36,7 +48,10 @@ class ToolPool:
         self._inflight[key] = future
         try:
             await self._rate_limit(definition)
+            t0 = time.monotonic()
             result = await definition.func(**args)
+            elapsed = time.monotonic() - t0
+            self._record_latency(definition.name, elapsed)
             result = self._truncate(result, definition.max_tokens)
             if definition.cacheable:
                 self._set_cached(key, result)
@@ -47,6 +62,30 @@ class ToolPool:
             raise
         finally:
             self._inflight.pop(key, None)
+
+    def p75_latency(self, tool_name: str) -> float | None:
+        """Return P75 latency for a tool, or None if insufficient data."""
+        data = self._latencies.get(tool_name)
+        if not data or len(data) < 2:
+            return None
+        sorted_data = sorted(data)
+        idx = int(len(sorted_data) * 0.75)
+        return sorted_data[min(idx, len(sorted_data) - 1)]
+
+    def p50_latency(self, tool_name: str) -> float | None:
+        data = self._latencies.get(tool_name)
+        if not data:
+            return None
+        sorted_data = sorted(data)
+        idx = len(sorted_data) // 2
+        return sorted_data[idx]
+
+    def _record_latency(self, tool_name: str, elapsed: float) -> None:
+        lst = self._latencies.setdefault(tool_name, [])
+        lst.append(elapsed)
+        # Cap at 1000 samples to avoid unbounded memory
+        if len(lst) > 1000:
+            lst.pop(0)
 
     def _resolve(self, tool: str | ToolDefinition) -> ToolDefinition:
         if isinstance(tool, ToolDefinition):

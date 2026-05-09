@@ -83,12 +83,16 @@ class MockReduceHandler(BaseHTTPRequestHandler):
         # Check if this is the reduce call (has "Results:" in the message)
         user_msg = messages[-1].get("content", "") if messages else ""
         if "Results:" in user_msg:
-            # Parse results and compute total
+            # Parse results and compute total — items now have status/output wrapping
             try:
                 results_start = user_msg.index("[")
                 results_json = user_msg[results_start:]
                 items = json.loads(results_json)
-                total = sum(item.get("value", 0) for item in items)
+                total = sum(
+                    item.get("output", {}).get("value", 0) if item.get("status") == "ok"
+                    else 0
+                    for item in items
+                )
                 count = len(items)
             except Exception:
                 total = 0

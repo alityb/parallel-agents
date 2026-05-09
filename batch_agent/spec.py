@@ -52,6 +52,7 @@ class BatchSpec:
     system_prompt: str = ""
     tools: Sequence[Any] = field(default_factory=tuple)
     output_schema: Any | None = None
+    # Drift 8: default model string kept current; update here when model is deprecated
     model: str = "claude-sonnet-4-20250514"
     backend: str = "anthropic://"
     max_concurrent: int = 10
@@ -63,11 +64,15 @@ class BatchSpec:
     min_response_tokens: int = 1024
     model_max_context: int = 200_000
     on_result: Callable[[AgentResult], Any] | None = None
-    diff_kv: bool = False
+    diff_kv: bool = False                           # Phase 3B feature flag (TokenDance)
+    kvflow: bool = True                             # Phase 3A flag; default True in native mode
+    predictive_prewarm: bool = False                # opt-in: pre-warm tools from checkpoint history
     checkpoint_dir: str | Path | None = None
     no_hoist: bool = False
     reduce: str | None = None
     reduce_schema: Any | None = None
+    # Drift 4: model-based compaction backend URL (None → heuristic fallback)
+    compaction_backend_url: str | None = None
 
     def __post_init__(self) -> None:
         if not self.task:

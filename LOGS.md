@@ -46,6 +46,13 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Added the required caveat: Anthropic Batch API cost assumes single-turn, no tool calls; BatchAgent supports multi-turn tool calls at the caching price.
 - Number trace check passed against `tests/benchmarks/results/cost_comparison/results.json`: `$1.6500`, `$0.8250`, `$0.8659`, `$0.0041`, `1.000x`, `0.500x`, `0.525x`, `0.002x`, `96.8%`, `$0.805/hr`, `19800 agents/hr`, `N=100`, `3000`, `500`, and `sonnet-4.6`.
 
+### Wheel rebuild and publish readiness — 2026-05-09
+
+- Ran `python3 -m build`; produced `dist/batch_agent-0.1.0.tar.gz` and `dist/batch_agent-0.1.0-py3-none-any.whl`.
+- Verified `dist/batch_agent-0.1.0-py3-none-any.whl` exists and includes `batch_agent/tools/builtin.py` with `async def claude_code` and the missing-CLI install message.
+- Ran `python3 -m twine check dist/*`; both the sdist and wheel passed.
+- Publish command after the required 70B benchmark: `python3 -m twine upload --repository pypi dist/batch_agent-0.1.0-py3-none-any.whl`.
+
 - Read `AGENTS.md` in full before writing code, per instruction. The repo only contained `AGENTS.md` and `LOGS.md`, so the implementation scope became a Phase 0 foundation rather than patching existing code.
 - Implemented package metadata, public API, compiler/state dataclasses, backend adapters, one-shot scheduler, tool definitions/pool/builtins, JSON repair, CLI, and unit tests aligned to Phase 0.
 - Design choice: `BatchAgent.run()` currently returns `AgentResult` objects instead of raw schema objects. This preserves the spec principle that failures are data, but it is not yet the final ergonomic target shown in `AGENTS.md` where successful runs return plain structured outputs.

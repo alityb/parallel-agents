@@ -423,3 +423,32 @@ Note: D-naive on GPU embeds file content in prompt (1 forward pass). E does true
 2. Tool dedup: only visible for slow tools (≥50ms) where multiple agents arrive within the execution window. File reads are too fast to benefit on real hardware.
 3. Wall-clock: BatchAgent is slower per-agent on both mock and GPU because it does more per agent (retry, validation, KVFlow, state tracking). The benefit is correctness, dedup, and developer time, not raw throughput for simple tasks.
 4. At N=200 on GPU the backpressure fix delivered a **40% wall-clock improvement** (36.5s → 21.8s). The remaining gap to 10s requires a larger GPU or more concurrency.
+
+### Harsh edge-case stress test — 2026-05-09
+
+#### Real bugs found by code reading
+
+1. **BUG FIXED — `on_result` callback exception hangs `stream()` forever.** `_run_job` called the callback before `result_queue.put(result)` with no error handling. If the callback raised, the result was never put on the queue, and `stream()`'s `while received < total_to_receive` loop waited forever. Confirmed by direct test: `asyncio.wait_for(..., timeout=3.0)` → `HUNG`. Fix: wrap callback in try/except inside `_run_job`, log the exception, and always put the result on the queue.
+
+2. **Dead code `_wrapped` and `counter` in dispatch loop.** `_wrapped` coroutine and `counter` variable are defined but never used; the task was created with `self._run_job()` directly. Harmless but confirms a messy refactor. The in-flight tracking works correctly through `_track`.
+
+3. **`extract_json_object` silently extracts inner object from array responses.** `'[{"value": 1}]'` → extracts `{"value": 1}`. Schema validation is the only guard; array responses are never caught as "wrong shape". Documented as known behaviour.
+
+4. **Rate limiter with identical args bypasses per-call limiting via inflight dedup.** 10 concurrent calls with the same args → 1 hits the rate limiter, 9 await the inflight Future. Limiting only applies per-execution. Fixed the test to use distinct args to actually exercise the rate limiter. Confirmed: distinct-key test takes ≥0.6s as expected.
+
+5. **`_track` orphaned tasks** — fire-and-forget, not cancelled explicitly in `finally`. Confirmed: they complete naturally once their watched job finishes; no meaningful leak.
+
+#### New tests added (26 edge-case tests, all pass)
+
+- Bug 1 fix verification: on_result sync and async callbacks both pass, stream completes
+- Dispatch in-flight counter: max_dispatched=10 with N=50, peak concurrent ≤15 ✓
+- All N complete with max_dispatched=5 and N=100 ✓
+- repair.py: empty, no-braces, null, array, multi-object, type coercion, unicode, nested, trailing-comma
+- ToolPool exception propagation: all concurrent waiters fail when leader fails; sequential retry gets fresh attempt ✓
+- Rate limiter: distinct keys ≥0.6s enforced; same key bypasses via inflight (by design)
+- max_turns=1 with tool-requiring model: fails cleanly, no hang ✓
+- max_turns=3 enforced against infinite-tool model ✓
+- PrioritySemaphore: capacity reduction doesn't evict existing holders; set_capacity(0) clamped ✓
+- max_inflight semantics: -1 → max_concurrent, positive → overrides, =1 serialises ✓
+
+**Full pytest suite after fixes: 88 passed** (was 62 — added 26 edge-case tests).

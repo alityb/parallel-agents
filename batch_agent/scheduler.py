@@ -225,15 +225,25 @@ class WaveScheduler:
         job: AgentJob,
         result_queue: asyncio.Queue[AgentResult | None],
     ) -> None:
-        """Execute a job and put the result on the result queue."""
+        """Execute a job and put the result on the result queue.
+
+        The result is ALWAYS put on the queue, even if the on_result callback
+        raises. A raising callback must not cause stream() to hang.
+        """
         result = await self._execute(job)
         if self._checkpoint:
             self._checkpoint.save_result(result)
         callback = self.plan.spec.on_result
         if callback:
-            maybe_awaitable = callback(result)
-            if inspect.isawaitable(maybe_awaitable):
-                await maybe_awaitable
+            try:
+                maybe_awaitable = callback(result)
+                if inspect.isawaitable(maybe_awaitable):
+                    await maybe_awaitable
+            except Exception as exc:
+                logger.warning(
+                    "on_result callback raised for %s: %s — result still delivered",
+                    result.job_id, exc,
+                )
         await result_queue.put(result)
 
     async def _execute(self, job: AgentJob) -> AgentResult:

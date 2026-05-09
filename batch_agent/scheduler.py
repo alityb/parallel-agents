@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from .backends import BackendAdapter, BackendResponse, ParsedToolCall
+from .compaction import compact_messages, should_compact
 from .repair import parse_and_validate_output
 from .schema import build_tool_schemas
 from .spec import AgentError, AgentJob, AgentResult, ExecutionPlan, Message
@@ -33,6 +34,11 @@ class WaveScheduler:
         self._tool_schemas = self._build_tool_schemas(self._tools)
         # Staggered dispatch: controls how many tasks are launched at once
         self._dispatch_gate = asyncio.Semaphore(plan.spec.max_concurrent * 2)
+        # Checkpoint store for crash recovery
+        self._checkpoint = None
+        if plan.spec.checkpoint_dir:
+            from .checkpoint import CheckpointStore
+            self._checkpoint = CheckpointStore(plan.spec.checkpoint_dir)
 
     async def run(self) -> list[AgentResult]:
         results: list[AgentResult | None] = [None] * len(self.plan.jobs)
@@ -44,10 +50,21 @@ class WaveScheduler:
         await self.backend.warm_prefix(self.plan.shared, self.plan.spec.model)
         queue: asyncio.Queue[AgentResult | None] = asyncio.Queue()
 
+        # Check for already-completed jobs (crash recovery)
+        completed_ids: set[str] = set()
+        if self._checkpoint:
+            completed_ids = self._checkpoint.get_completed_job_ids()
+
         # Priority queue: (estimated_turns_remaining, tiebreaker, job)
-        # Lower turns_remaining = higher priority (drains nearly-done agents first)
         pq: list[tuple[int, int, AgentJob]] = []
+        skipped_results: list[AgentResult] = []
         for i, job in enumerate(self.plan.jobs):
+            if job.job_id in completed_ids and self._checkpoint:
+                # Already completed in a previous run — load result
+                prev = self._checkpoint.load_result(job.job_id)
+                if prev:
+                    skipped_results.append(prev)
+                    continue
             heapq.heappush(pq, (job.max_turns, i, job))
 
         # Staggered dispatch: launch tasks in batches, not all at once
@@ -68,10 +85,14 @@ class WaveScheduler:
                     await asyncio.sleep(0)
             dispatch_done.set()
 
+        # Yield previously completed results first
+        for sr in skipped_results:
+            yield sr
+
         dispatcher = asyncio.create_task(dispatch_loop())
 
         completed_count = 0
-        total_jobs = len(self.plan.jobs)
+        total_jobs = len(self.plan.jobs) - len(skipped_results)
 
         try:
             while completed_count < total_jobs:
@@ -91,6 +112,9 @@ class WaveScheduler:
         """Execute a job and release the dispatch gate when done."""
         try:
             result = await self._execute(job)
+            # Save to checkpoint if configured
+            if self._checkpoint:
+                self._checkpoint.save_result(result)
             callback = self.plan.spec.on_result
             if callback:
                 maybe_awaitable = callback(result)
@@ -153,13 +177,16 @@ class WaveScheduler:
                         job.job_id, state.turn, time.monotonic() - t_acquire)
 
             try:
-                response = await self.backend.generate(
-                    shared=self.plan.shared,
-                    job=job,
-                    messages=state.messages,
-                    model=self.plan.spec.model,
-                    tools=self._tool_schemas if self._tools else None,
-                    timeout=self.plan.spec.timeout_per_agent,
+                response = await asyncio.wait_for(
+                    self.backend.generate(
+                        shared=self.plan.shared,
+                        job=job,
+                        messages=state.messages,
+                        model=self.plan.spec.model,
+                        tools=self._tool_schemas if self._tools else None,
+                        timeout=self.plan.spec.timeout_per_agent,
+                    ),
+                    timeout=self.plan.spec.timeout_per_turn,
                 )
             finally:
                 # === RELEASE SEMAPHORE: free GPU slot immediately after inference ===
@@ -202,6 +229,11 @@ class WaveScheduler:
                 state.tool_calls_pending = []
                 state.set_status(AgentStatus.RUNNING)
                 logger.info("[%s] turn=%d tool results injected, continuing loop", job.job_id, state.turn)
+
+                # Message compaction: reduce context length for long-running agents
+                if should_compact(state.turn):
+                    state.messages = compact_messages(state.messages, state.turn)
+
                 continue
 
             # No tool calls — model produced a final response
@@ -233,7 +265,11 @@ class WaveScheduler:
                 continue
 
             try:
-                result = await self.tool_pool.call(tc.name, tc.args)
+                tool_timeout = self.plan.spec.timeout_per_tool
+                result = await asyncio.wait_for(
+                    self.tool_pool.call(tc.name, tc.args),
+                    timeout=tool_timeout,
+                )
                 content = result if isinstance(result, str) else json.dumps(result, default=str)
                 results.append({
                     "type": "tool_result",
@@ -246,6 +282,14 @@ class WaveScheduler:
                     "type": "tool_result",
                     "tool_use_id": tc.id,
                     "content": f"[ERROR] Unknown tool: {tc.name}",
+                    "is_error": True,
+                })
+            except asyncio.TimeoutError:
+                logger.warning("[tool_pool] tool %s timed out", tc.name)
+                results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tc.id,
+                    "content": f"[ERROR] Tool execution timed out after {self.plan.spec.timeout_per_tool}s",
                     "is_error": True,
                 })
             except Exception as exc:

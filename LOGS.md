@@ -59,3 +59,88 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - All agents produce valid Pydantic-validated output
 - Tool pool correctly executes `http_get` against local mock server
 - Total runtime: 0.16s (mock, no real latency)
+
+### Phase 1 completion — 2026-05-09
+
+#### Tool schema generation (`batch_agent/schema.py`)
+- Extracted from inline code in scheduler into a proper module.
+- Handles: `str`, `int`, `float`, `bool`, `list[T]`, `dict[str, T]`, `Optional[T]`, `Union`, Pydantic models.
+- Bug: `from __future__ import annotations` in tool modules stringifies all annotations. Fixed by using `typing.get_type_hints()` to resolve them at schema-build time.
+- 7 unit tests passing.
+
+#### vLLM adapter verification
+- Verified against a local mock OpenAI-compatible server.
+- `warm_prefix` correctly sends `POST /v1/completions` with `max_tokens=0`.
+- `generate` correctly sends `POST /v1/chat/completions`.
+- **Blocker for real GPU test:** No GPU available in this environment. The adapter is structurally correct but not tested against a live vLLM server.
+
+#### OpenAI/vLLM tool call parsing (`backends/openai.py`)
+- Full parsing of OpenAI `tool_calls` response format (id, function.name, function.arguments JSON).
+- Malformed blocks logged and returned with `error=True` (same as Anthropic adapter).
+- Multi-turn message conversion: `assistant_raw` → OpenAI format with `tool_calls`, `tool_result` → OpenAI `role: tool`.
+- Anthropic tool schemas auto-converted to OpenAI function calling format.
+
+#### Priority queue + staggered dispatch
+- Jobs ordered by `max_turns` (lower = higher priority, drains fast agents first).
+- Dispatch gate limits how far ahead of completions new tasks are launched.
+- Heterogeneous test: 5 fast (1-turn) + 5 slow (4-turn) agents, max_concurrent=3.
+- Result: fast agents avg position 2.0, slow agents avg position 7.0 — priority works.
+
+### Phase 2 implementation — 2026-05-09
+
+#### Configurable timeouts
+- Added `timeout_per_turn` and `timeout_per_tool` to `BatchSpec`.
+- `timeout_per_turn` wraps `backend.generate()` with `asyncio.wait_for()`.
+- `timeout_per_tool` wraps each tool call with `asyncio.wait_for()`.
+- `asyncio.TimeoutError` caught and reported as tool error (non-fatal to agent).
+
+#### Message compaction (`batch_agent/compaction.py`)
+- Triggers every 3 turns (configurable via `COMPACT_INTERVAL`).
+- Tool results older than 2 turns are truncated to 200 chars with `[COMPACTED]` marker.
+- Does not require a model call — uses heuristic truncation.
+- Design choice: model-based summarization deferred to when a compaction model is available. The current approach prevents unbounded context growth, which is the immediate goal.
+
+#### Reduce topology (`BatchAgent.run_with_reduce()`)
+- After all map agents complete, a reduce agent receives all successful outputs as JSON.
+- Reduce prompt template supports `{n}` substitution for result count.
+- `reduce_schema` validates the aggregated output via Pydantic.
+- Tested: 5 items → reduce sums values → validates Summary model.
+
+#### @batchable SQL/HTTP batch grouping (`batch_agent/tools/sql.py`)
+- `BatchCollector` collects calls to the same batchable tool within a 5ms window.
+- Groups by `(tool_name, batch_query)` key.
+- If multiple calls arrive within the window, executes them together.
+- Single calls within the window execute immediately without batching overhead.
+- Design choice: actual SQL batch execution requires a `_batch_handler` attribute on the tool function. Without it, falls back to parallel individual calls.
+
+#### SQLite checkpoint store (`batch_agent/checkpoint.py`)
+- Saves `AgentResult` after each job completes.
+- On re-run with same `checkpoint_dir`, skips already-completed jobs (crash recovery).
+- Uses WAL journal mode for concurrent read/write safety.
+- Integrated into `WaveScheduler`: completed jobs yield immediately, new jobs dispatched normally.
+
+#### 500-agent benchmark
+- **Result: 500/500 OK, 0% failure rate, 55 agents/sec throughput, 9.15s wall-clock.**
+- 64 concurrent agents, 100 multi-turn (20%), transient 1% failure injection.
+- 15 tool timeouts observed → handled gracefully as error results.
+- All output index values verified correct.
+- No OOM, no unhandled exceptions.
+
+#### Phase 2 success criteria status
+| Criterion | Status |
+|---|---|
+| 500 agents complete with ≤ 2% failure rate | PASS (0%) |
+| No OOM crashes at 500 agents | PASS |
+| No unhandled exceptions | PASS |
+| Retry logic with exponential backoff | PASS (implemented since Phase 0) |
+| Message compaction | PASS (heuristic, not model-based) |
+| @batchable tool annotation | PASS (collector implemented) |
+| Reduce topology | PASS |
+| Configurable timeouts (agent/turn/tool) | PASS |
+| Overflow to disk (SQLite checkpoint) | PASS |
+
+#### Remaining known gaps
+- **No live Anthropic/GPU benchmark** — billing issue on the API key, no GPU in env.
+- **Model-based compaction** — deferred; heuristic truncation works but loses semantic information.
+- **SQL batch_handler protocol** — the `@batchable` annotation exists but actual SQL execution requires user-implemented batch handlers.
+- **Cost comparison** — cannot compute cost-per-task without live runs.

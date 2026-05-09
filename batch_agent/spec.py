@@ -58,12 +58,16 @@ class BatchSpec:
     max_turns: int = 1
     max_retries: int = 3
     timeout_per_agent: float | None = 300
+    timeout_per_turn: float | None = 60
+    timeout_per_tool: float | None = 30
     min_response_tokens: int = 1024
     model_max_context: int = 200_000
     on_result: Callable[[AgentResult], Any] | None = None
     diff_kv: bool = False
     checkpoint_dir: str | Path | None = None
     no_hoist: bool = False
+    reduce: str | None = None
+    reduce_schema: Any | None = None
 
     def __post_init__(self) -> None:
         if not self.task:

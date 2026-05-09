@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -39,6 +40,14 @@ class BackendResponse:
         return self.stop_reason != "tool_use" and not self.tool_calls
 
 
+@dataclass(frozen=True)
+class StreamingToolCall:
+    """Tool-call event emitted before a streaming response is fully complete."""
+
+    tool_call: ParsedToolCall | None = None
+    is_final: bool = False
+
+
 class BackendAdapter(ABC):
     @abstractmethod
     async def generate(
@@ -56,6 +65,40 @@ class BackendAdapter(ABC):
 
     async def warm_prefix(self, shared: SharedContext, model: str) -> str | None:
         return None
+
+    async def generate_streaming(
+        self,
+        *,
+        shared: SharedContext,
+        job: AgentJob,
+        messages: list[Message] | None = None,
+        model: str,
+        tools: list[dict[str, Any]] | None = None,
+        metadata: dict[str, Any] | None = None,
+        timeout: float | None = None,
+        tool_queue: Any | None = None,
+    ) -> BackendResponse:
+        """Generate and optionally emit tool calls as they become available.
+
+        Default implementation preserves existing backend behavior: tool calls
+        are emitted only after the non-streaming response returns.
+        """
+        kwargs: dict[str, Any] = {
+            "shared": shared,
+            "job": job,
+            "messages": messages,
+            "model": model,
+            "tools": tools,
+            "timeout": timeout,
+        }
+        if "metadata" in inspect.signature(self.generate).parameters:
+            kwargs["metadata"] = metadata
+        response = await self.generate(**kwargs)
+        if tool_queue is not None:
+            for tool_call in response.tool_calls:
+                await tool_queue.put(StreamingToolCall(tool_call=tool_call))
+            await tool_queue.put(StreamingToolCall(is_final=True))
+        return response
 
     async def get_cache_metrics(self) -> dict[str, float]:
         """Return cache/utilization metrics for adaptive concurrency.

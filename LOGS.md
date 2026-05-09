@@ -10,6 +10,16 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Added unit coverage for hash stability, multiple-header stripping, unchanged prompts with no preamble, and the `strip_preamble=False` escape hatch. Added vLLM integration coverage showing two different session headers produce the same warm-prefix hash when stripping is enabled and different hashes when disabled.
 - Expected impact: when `Tool.claude_code` injects a session-specific billing header at token zero, prefix cache hit rate should return to the normal shared-prefix range (target ≥90%, previously measured API-cache workload 96.8%) instead of collapsing toward zero because every agent prefix hashes differently.
 
+### W16 streaming tool dispatch — 2026-05-09
+
+- Added `BatchSpec.streaming_tool_dispatch` defaulting to `True`.
+- Added `BackendAdapter.generate_streaming()` plus `StreamingToolCall`; default behavior preserves old backends by emitting tool calls only after normal `generate()` returns.
+- Implemented streaming parsers for Anthropic Messages SSE and OpenAI/vLLM-compatible SSE. Both fall back to normal JSON parsing when a mock/non-streaming server ignores `stream=True`.
+- Updated the scheduler to consume streamed tool-call events from an `asyncio.Queue` and start `ToolPool` execution immediately while generation continues. If a backend does not stream a tool call, the scheduler falls back to the previous post-response execution path.
+- Tests added: scheduler verifies streamed tools start before `generate_streaming()` returns, disabled mode waits until `generate()` returns, and integration coverage verifies a streamed tool starts before the mock final response.
+- Expected savings: for max_turns=3 with 500ms tool latency, up to 1.5s per agent if each turn's tool latency overlaps with ongoing generation.
+- Measured mock savings: one 100ms tool call with 100ms remaining generation ran in `0.204s` with streaming dispatch vs `0.306s` without it, saving `0.101s`.
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

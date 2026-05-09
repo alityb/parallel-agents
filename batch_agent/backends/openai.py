@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from . import BackendAdapter, BackendResponse, ParsedToolCall
+from . import BackendAdapter, BackendResponse, ParsedToolCall, StreamingToolCall
 from .anthropic import _API_MODE_CAPABILITIES
 from ..spec import AgentJob, Message, SharedContext
 from ..utils import strip_preamble_headers
@@ -78,6 +78,110 @@ class OpenAIBackend(BackendAdapter):
             tool_calls=tool_calls,
             stop_reason=stop_reason,
         )
+
+    async def generate_streaming(
+        self,
+        *,
+        shared: SharedContext,
+        job: AgentJob,
+        messages: list[Message] | None = None,
+        model: str,
+        tools: list[dict[str, Any]] | None = None,
+        metadata: dict[str, Any] | None = None,
+        timeout: float | None = None,
+        tool_queue: Any | None = None,
+    ) -> BackendResponse:
+        if not self.api_key:
+            raise RuntimeError("OPENAI_API_KEY is required for openai:// backend")
+
+        api_messages: list[dict[str, Any]] = []
+        if shared.prefix:
+            system_prompt = strip_preamble_headers(shared.prefix) if shared.strip_preamble else shared.prefix
+            api_messages.append({"role": "system", "content": system_prompt})
+
+        if messages is not None:
+            api_messages.extend(_messages_to_openai(messages))
+        else:
+            api_messages.append({"role": "user", "content": job.prompt})
+
+        payload: dict[str, Any] = {"model": model, "messages": api_messages, "stream": True}
+        if tools:
+            payload["tools"] = _convert_tools_to_openai(tools)
+
+        headers = {"authorization": f"Bearer {self.api_key}", "content-type": "application/json"}
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/v1/chat/completions",
+                    json=payload,
+                    headers=headers,
+                ) as response:
+                    response.raise_for_status()
+                    content_type = response.headers.get("content-type", "")
+                    if "text/event-stream" not in content_type:
+                        raw = json.loads((await response.aread()).decode())
+                        return await _emit_openai_response(raw, tool_queue)
+
+                    content_parts: list[str] = []
+                    tool_chunks: dict[int, dict[str, str]] = {}
+                    finish_reason = ""
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        data = line.removeprefix("data:").strip()
+                        if not data or data == "[DONE]":
+                            continue
+                        event = json.loads(data)
+                        choice = (event.get("choices") or [{}])[0]
+                        delta = choice.get("delta", {})
+                        if delta.get("content"):
+                            content_parts.append(delta["content"])
+                        for chunk in delta.get("tool_calls") or []:
+                            index = int(chunk.get("index", 0))
+                            entry = tool_chunks.setdefault(index, {"id": "", "name": "", "arguments": ""})
+                            if chunk.get("id"):
+                                entry["id"] = chunk["id"]
+                            func = chunk.get("function") or {}
+                            if func.get("name"):
+                                entry["name"] = func["name"]
+                            if func.get("arguments"):
+                                entry["arguments"] += func["arguments"]
+                        finish_reason = choice.get("finish_reason") or finish_reason
+
+                    tool_calls = _tool_chunks_to_calls(tool_chunks)
+                    if tool_queue is not None:
+                        for tool_call in tool_calls:
+                            await tool_queue.put(StreamingToolCall(tool_call=tool_call))
+                        await tool_queue.put(StreamingToolCall(is_final=True))
+                    raw = {
+                        "choices": [{
+                            "message": {
+                                "role": "assistant",
+                                "content": "".join(content_parts) or None,
+                                "tool_calls": [
+                                    {
+                                        "id": tc.id,
+                                        "type": "function",
+                                        "function": {"name": tc.name, "arguments": json.dumps(tc.args)},
+                                    }
+                                    for tc in tool_calls if not tc.error
+                                ],
+                            },
+                            "finish_reason": finish_reason,
+                        }]
+                    }
+                    return BackendResponse(
+                        content="".join(content_parts),
+                        raw=raw,
+                        tool_calls=tool_calls,
+                        stop_reason="tool_use" if finish_reason == "tool_calls" or tool_calls else finish_reason,
+                    )
+        finally:
+            if tool_queue is not None:
+                # If an exception is raised before the normal final event, unblock
+                # the scheduler's dispatch loop.
+                await tool_queue.put(StreamingToolCall(is_final=True))
 
     def backend_capabilities(self) -> dict[str, Any]:
         return _API_MODE_CAPABILITIES.copy()
@@ -186,6 +290,55 @@ def _extract_tool_calls(message: dict[str, Any]) -> list[ParsedToolCall]:
 
         parsed.append(ParsedToolCall(id=call_id, name=name, args=args, error=False))
 
+    return parsed
+
+
+async def _emit_openai_response(raw: dict[str, Any], tool_queue: Any | None) -> BackendResponse:
+    choice = raw["choices"][0]
+    message = choice["message"]
+    content = message.get("content") or ""
+    finish_reason = choice.get("finish_reason", "")
+    tool_calls = _extract_tool_calls(message)
+    if tool_queue is not None:
+        for tool_call in tool_calls:
+            await tool_queue.put(StreamingToolCall(tool_call=tool_call))
+        await tool_queue.put(StreamingToolCall(is_final=True))
+    return BackendResponse(
+        content=content,
+        raw=raw,
+        tool_calls=tool_calls,
+        stop_reason="tool_use" if finish_reason == "tool_calls" or tool_calls else finish_reason,
+    )
+
+
+def _tool_chunks_to_calls(tool_chunks: dict[int, dict[str, str]]) -> list[ParsedToolCall]:
+    parsed: list[ParsedToolCall] = []
+    for index in sorted(tool_chunks):
+        chunk = tool_chunks[index]
+        call_id = chunk.get("id", "") or f"call_{index}"
+        name = chunk.get("name", "")
+        arguments = chunk.get("arguments", "") or "{}"
+        try:
+            args = json.loads(arguments)
+        except json.JSONDecodeError as exc:
+            parsed.append(ParsedToolCall(
+                id=call_id,
+                name=name or "unknown",
+                args={},
+                error=True,
+                error_message=f"malformed arguments JSON: {exc}",
+            ))
+            continue
+        if not isinstance(args, dict):
+            parsed.append(ParsedToolCall(
+                id=call_id,
+                name=name or "unknown",
+                args={},
+                error=True,
+                error_message=f"arguments is {type(args).__name__}, expected dict",
+            ))
+            continue
+        parsed.append(ParsedToolCall(id=call_id, name=name, args=args, error=False))
     return parsed
 
 

@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from . import BackendAdapter, BackendResponse, ParsedToolCall
+from . import BackendAdapter, BackendResponse, ParsedToolCall, StreamingToolCall
 from ..spec import AgentJob, Message, SharedContext
 from ..utils import DEFAULT_MAX_TOKENS, strip_preamble_headers
 
@@ -80,6 +80,122 @@ class AnthropicBackend(BackendAdapter):
         stop_reason = raw.get("stop_reason", "")
 
         return BackendResponse(content=content, raw=raw, tool_calls=tool_calls, stop_reason=stop_reason)
+
+    async def generate_streaming(
+        self,
+        *,
+        shared: SharedContext,
+        job: AgentJob,
+        messages: list[Message] | None = None,
+        model: str,
+        tools: list[dict[str, Any]] | None = None,
+        metadata: dict[str, Any] | None = None,
+        timeout: float | None = None,
+        tool_queue: Any | None = None,
+    ) -> BackendResponse:
+        if not self.api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY is required for anthropic:// backend")
+
+        system: str | list[dict[str, Any]]
+        if shared.prefix:
+            system_prompt = strip_preamble_headers(shared.prefix) if shared.strip_preamble else shared.prefix
+            system = [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
+        else:
+            system = ""
+
+        api_messages = _messages_to_api(messages) if messages is not None else [{"role": "user", "content": job.prompt}]
+        payload: dict[str, Any] = {
+            "model": model,
+            "max_tokens": DEFAULT_MAX_TOKENS,
+            "system": system,
+            "messages": api_messages,
+            "stream": True,
+        }
+        if tools:
+            payload["tools"] = tools
+
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "prompt-caching-2024-07-31",
+            "content-type": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                async with client.stream("POST", f"{self.base_url}/v1/messages", json=payload, headers=headers) as response:
+                    response.raise_for_status()
+                    content_type = response.headers.get("content-type", "")
+                    if "text/event-stream" not in content_type:
+                        raw = json.loads((await response.aread()).decode())
+                        return await _emit_anthropic_response(raw, tool_queue)
+
+                    text_parts: list[str] = []
+                    content_blocks: list[dict[str, Any]] = []
+                    active_blocks: dict[int, dict[str, Any]] = {}
+                    tool_calls: list[ParsedToolCall] = []
+                    stop_reason = ""
+
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        data = line.removeprefix("data:").strip()
+                        if not data:
+                            continue
+                        event = json.loads(data)
+                        event_type = event.get("type")
+                        index = int(event.get("index", 0))
+
+                        if event_type == "content_block_start":
+                            block = dict(event.get("content_block") or {})
+                            if block.get("type") == "tool_use":
+                                block.setdefault("input_json", "")
+                            active_blocks[index] = block
+                        elif event_type == "content_block_delta":
+                            block = active_blocks.setdefault(index, {})
+                            delta = event.get("delta") or {}
+                            if delta.get("type") == "text_delta":
+                                text = delta.get("text", "")
+                                text_parts.append(text)
+                                block["type"] = "text"
+                                block["text"] = block.get("text", "") + text
+                            elif delta.get("type") == "input_json_delta":
+                                block["input_json"] = block.get("input_json", "") + delta.get("partial_json", "")
+                        elif event_type == "content_block_stop":
+                            block = active_blocks.pop(index, {})
+                            if block.get("type") == "tool_use":
+                                parsed = _tool_block_to_call(block)
+                                tool_calls.append(parsed)
+                                if tool_queue is not None:
+                                    await tool_queue.put(StreamingToolCall(tool_call=parsed))
+                                content_blocks.append({
+                                    "type": "tool_use",
+                                    "id": parsed.id,
+                                    "name": parsed.name,
+                                    "input": parsed.args,
+                                })
+                            elif block:
+                                content_blocks.append(block)
+                        elif event_type == "message_delta":
+                            delta = event.get("delta") or {}
+                            stop_reason = delta.get("stop_reason") or stop_reason
+                        elif event_type == "message_stop":
+                            break
+
+                    if tool_queue is not None:
+                        await tool_queue.put(StreamingToolCall(is_final=True))
+                    raw = {
+                        "content": content_blocks,
+                        "stop_reason": stop_reason or ("tool_use" if tool_calls else "end_turn"),
+                    }
+                    return BackendResponse(
+                        content="".join(part for part in text_parts if part),
+                        raw=raw,
+                        tool_calls=tool_calls,
+                        stop_reason=raw["stop_reason"],
+                    )
+        finally:
+            if tool_queue is not None:
+                await tool_queue.put(StreamingToolCall(is_final=True))
 
     def backend_capabilities(self) -> dict[str, Any]:
         return _API_MODE_CAPABILITIES.copy()
@@ -186,3 +302,44 @@ def _extract_tool_calls(raw: dict[str, Any]) -> list[ParsedToolCall]:
         ))
 
     return tool_calls
+
+
+async def _emit_anthropic_response(raw: dict[str, Any], tool_queue: Any | None) -> BackendResponse:
+    content = _extract_text(raw)
+    tool_calls = _extract_tool_calls(raw)
+    stop_reason = raw.get("stop_reason", "")
+    if tool_queue is not None:
+        for tool_call in tool_calls:
+            await tool_queue.put(StreamingToolCall(tool_call=tool_call))
+        await tool_queue.put(StreamingToolCall(is_final=True))
+    return BackendResponse(content=content, raw=raw, tool_calls=tool_calls, stop_reason=stop_reason)
+
+
+def _tool_block_to_call(block: dict[str, Any]) -> ParsedToolCall:
+    raw_input = block.get("input")
+    if raw_input is None:
+        raw_json = block.get("input_json", "") or "{}"
+        try:
+            raw_input = json.loads(raw_json)
+        except json.JSONDecodeError as exc:
+            return ParsedToolCall(
+                id=block.get("id", "unknown"),
+                name=block.get("name", "unknown"),
+                args={},
+                error=True,
+                error_message=f"malformed input JSON: {exc}",
+            )
+    if not isinstance(raw_input, dict):
+        return ParsedToolCall(
+            id=block.get("id", "unknown"),
+            name=block.get("name", "unknown"),
+            args={},
+            error=True,
+            error_message=f"tool_use block 'input' is {type(raw_input).__name__}, expected dict",
+        )
+    return ParsedToolCall(
+        id=block.get("id", "unknown"),
+        name=block.get("name", "unknown"),
+        args=raw_input,
+        error=False,
+    )

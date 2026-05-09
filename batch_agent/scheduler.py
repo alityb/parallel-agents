@@ -24,7 +24,7 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
-from .backends import BackendAdapter, BackendResponse, ParsedToolCall
+from .backends import BackendAdapter, BackendResponse, ParsedToolCall, StreamingToolCall
 from .backpressure import BackpressureController, calibrate_max_inflight
 from .compaction import compact_messages_async, should_compact
 from .kvflow import KVFlowAdvisor
@@ -304,6 +304,7 @@ class WaveScheduler:
         state.set_status(AgentStatus.RUNNING)
 
         response: BackendResponse | None = None
+        streamed_tool_tasks: dict[str, asyncio.Task[dict[str, Any]]] | None = None
 
         for turn in range(start_turn, max_turns):
             state.turn = turn + 1
@@ -321,8 +322,8 @@ class WaveScheduler:
 
             t_generate = time.monotonic()
             try:
-                response = await asyncio.wait_for(
-                    self._generate_with_metadata(job, state),
+                response, streamed_tool_tasks = await asyncio.wait_for(
+                    self._generate_for_turn(job, state),
                     timeout=self.plan.spec.timeout_per_turn,
                 )
             finally:
@@ -378,7 +379,10 @@ class WaveScheduler:
                     await self._kvflow_advisor.emit_once()
 
                 t_tool = time.monotonic()
-                tool_result_blocks = await self._execute_tool_calls(response.tool_calls)
+                tool_result_blocks = await self._execute_tool_calls(
+                    response.tool_calls,
+                    prefetched=streamed_tool_tasks,
+                )
                 tool_elapsed = time.monotonic() - t_tool
                 state.record_tool_wait(tool_elapsed)
                 # Update KVFlow ETA fields (used by KVFlowAdvisor in Phase 3A)
@@ -429,52 +433,99 @@ class WaveScheduler:
 
     # ── tool execution ─────────────────────────────────────────────────────────
 
+    async def _execute_one_tool_call(self, tc: ParsedToolCall) -> dict[str, Any]:
+        if tc.error:
+            return {
+                "type": "tool_result",
+                "tool_use_id": tc.id,
+                "content": f"[ERROR] Malformed tool call: {tc.error_message}",
+                "is_error": True,
+            }
+        try:
+            timeout = self.plan.spec.timeout_per_tool
+            result = await asyncio.wait_for(
+                self.tool_pool.call(tc.name, tc.args), timeout=timeout
+            )
+            content = result if isinstance(result, str) else json.dumps(result, default=str)
+            return {"type": "tool_result", "tool_use_id": tc.id, "content": content}
+        except KeyError:
+            logger.warning("[tool_pool] unknown tool: %s", tc.name)
+            return {
+                "type": "tool_result",
+                "tool_use_id": tc.id,
+                "content": f"[ERROR] Unknown tool: {tc.name}",
+                "is_error": True,
+            }
+        except asyncio.TimeoutError:
+            logger.warning("[tool_pool] tool %s timed out", tc.name)
+            return {
+                "type": "tool_result",
+                "tool_use_id": tc.id,
+                "content": f"[ERROR] Tool timed out after {self.plan.spec.timeout_per_tool}s",
+                "is_error": True,
+            }
+        except Exception as exc:
+            logger.warning("[tool_pool] tool %s failed: %s", tc.name, exc)
+            return {
+                "type": "tool_result",
+                "tool_use_id": tc.id,
+                "content": f"[ERROR] Tool execution failed: {exc}",
+                "is_error": True,
+            }
+
     async def _execute_tool_calls(
-        self, tool_calls: list[ParsedToolCall]
+        self,
+        tool_calls: list[ParsedToolCall],
+        *,
+        prefetched: dict[str, asyncio.Task[dict[str, Any]]] | None = None,
     ) -> list[dict[str, Any]]:
         """Execute tool calls concurrently and return Anthropic tool_result blocks."""
-        async def _one(tc: ParsedToolCall) -> dict[str, Any]:
-            if tc.error:
-                return {
-                    "type": "tool_result",
-                    "tool_use_id": tc.id,
-                    "content": f"[ERROR] Malformed tool call: {tc.error_message}",
-                    "is_error": True,
-                }
-            try:
-                timeout = self.plan.spec.timeout_per_tool
-                result = await asyncio.wait_for(
-                    self.tool_pool.call(tc.name, tc.args), timeout=timeout
-                )
-                content = result if isinstance(result, str) else json.dumps(result, default=str)
-                return {"type": "tool_result", "tool_use_id": tc.id, "content": content}
-            except KeyError:
-                logger.warning("[tool_pool] unknown tool: %s", tc.name)
-                return {
-                    "type": "tool_result",
-                    "tool_use_id": tc.id,
-                    "content": f"[ERROR] Unknown tool: {tc.name}",
-                    "is_error": True,
-                }
-            except asyncio.TimeoutError:
-                logger.warning("[tool_pool] tool %s timed out", tc.name)
-                return {
-                    "type": "tool_result",
-                    "tool_use_id": tc.id,
-                    "content": f"[ERROR] Tool timed out after {self.plan.spec.timeout_per_tool}s",
-                    "is_error": True,
-                }
-            except Exception as exc:
-                logger.warning("[tool_pool] tool %s failed: %s", tc.name, exc)
-                return {
-                    "type": "tool_result",
-                    "tool_use_id": tc.id,
-                    "content": f"[ERROR] Tool execution failed: {exc}",
-                    "is_error": True,
-                }
+        tasks: list[asyncio.Task[dict[str, Any]]] = []
+        prefetched = prefetched or {}
+        for tc in tool_calls:
+            task = prefetched.get(tc.id)
+            if task is None:
+                task = asyncio.create_task(self._execute_one_tool_call(tc))
+            tasks.append(task)
+        return list(await asyncio.gather(*tasks))
 
-        # Execute all calls concurrently (they're all in TOOL_WAIT, semaphore is free)
-        return list(await asyncio.gather(*[_one(tc) for tc in tool_calls]))
+    async def _generate_for_turn(
+        self,
+        job: AgentJob,
+        state: AgentState,
+    ) -> tuple[BackendResponse, dict[str, asyncio.Task[dict[str, Any]]] | None]:
+        if not self.plan.spec.streaming_tool_dispatch:
+            return await self._generate_with_metadata(job, state), None
+
+        tool_queue: asyncio.Queue[StreamingToolCall] = asyncio.Queue()
+        tool_tasks: dict[str, asyncio.Task[dict[str, Any]]] = {}
+
+        async def dispatch_tools() -> None:
+            while True:
+                item = await tool_queue.get()
+                if item.is_final:
+                    break
+                if item.tool_call is None:
+                    continue
+                tc = item.tool_call
+                if tc.id not in tool_tasks:
+                    tool_tasks[tc.id] = asyncio.create_task(
+                        self._execute_one_tool_call(tc),
+                        name=f"stream-tool-{state.job_id}-{tc.id}",
+                    )
+
+        dispatch_task = asyncio.create_task(dispatch_tools(), name=f"stream-dispatch-{state.job_id}")
+        try:
+            response = await self._generate_streaming_with_metadata(job, state, tool_queue)
+            await tool_queue.put(StreamingToolCall(is_final=True))
+            await dispatch_task
+            return response, tool_tasks if tool_tasks else None
+        except Exception:
+            dispatch_task.cancel()
+            for task in tool_tasks.values():
+                task.cancel()
+            await asyncio.gather(dispatch_task, *tool_tasks.values(), return_exceptions=True)
+            raise
 
     async def _generate_with_metadata(self, job: AgentJob, state: AgentState) -> BackendResponse:
         """Call backend.generate and pass kv_key metadata when supported."""
@@ -489,6 +540,25 @@ class WaveScheduler:
         if "metadata" in inspect.signature(self.backend.generate).parameters:
             kwargs["metadata"] = {"kv_key": state.kv_key, "job_id": state.job_id}
         return await self.backend.generate(**kwargs)
+
+    async def _generate_streaming_with_metadata(
+        self,
+        job: AgentJob,
+        state: AgentState,
+        tool_queue: asyncio.Queue[StreamingToolCall],
+    ) -> BackendResponse:
+        kwargs: dict[str, Any] = {
+            "shared": self.plan.shared,
+            "job": job,
+            "messages": state.messages,
+            "model": self.plan.spec.model,
+            "tools": self._tool_schemas if self._tools else None,
+            "timeout": self.plan.spec.timeout_per_agent,
+            "tool_queue": tool_queue,
+        }
+        if "metadata" in inspect.signature(self.backend.generate_streaming).parameters:
+            kwargs["metadata"] = {"kv_key": state.kv_key, "job_id": state.job_id}
+        return await self.backend.generate_streaming(**kwargs)
 
     # ── adaptive concurrency (Drift 3) ─────────────────────────────────────────
 

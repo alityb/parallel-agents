@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 from pydantic import BaseModel
 
-from batch_agent.backends import BackendAdapter, BackendResponse
+from batch_agent.backends import BackendAdapter, BackendResponse, ParsedToolCall, StreamingToolCall
 from batch_agent.compiler import TaskCompiler
 from batch_agent.scheduler import WaveScheduler
 from batch_agent.spec import AgentJob, BatchSpec, Message, SharedContext
+from batch_agent.tools import Tool
 
 
 class Payload(BaseModel):
@@ -47,3 +49,79 @@ def test_scheduler_returns_failures_as_data_for_oversized_job() -> None:
     assert results[0].ok is False
     assert results[0].error is not None
     assert results[0].error.type == "OVERSIZED"
+
+
+def test_streaming_tool_dispatch_starts_tool_before_generate_returns() -> None:
+    events: dict[str, float] = {}
+
+    @Tool.define(name="stream_timing_tool", cacheable=False)
+    async def stream_timing_tool() -> str:
+        events["tool_start"] = time.monotonic()
+        await asyncio.sleep(0.01)
+        return "ok"
+
+    class StreamingBackend(BackendAdapter):
+        async def generate(self, *, shared: SharedContext, job: AgentJob, messages: list[Message] | None = None, model: str, tools=None, timeout: float | None = None) -> BackendResponse:
+            await asyncio.sleep(0.05)
+            if messages and any(m.role == "tool_result" for m in messages):
+                return BackendResponse(content='{"value": "done"}', stop_reason="end_turn")
+            events["generate_return"] = time.monotonic()
+            tc = ParsedToolCall(id="call_1", name="stream_timing_tool", args={})
+            return BackendResponse(content="", tool_calls=[tc], stop_reason="tool_use")
+
+        async def generate_streaming(self, *, shared: SharedContext, job: AgentJob, messages: list[Message] | None = None, model: str, tools=None, timeout: float | None = None, tool_queue=None, metadata=None) -> BackendResponse:
+            if messages and any(m.role == "tool_result" for m in messages):
+                return await self.generate(shared=shared, job=job, messages=messages, model=model, tools=tools, timeout=timeout)
+            tc = ParsedToolCall(id="call_1", name="stream_timing_tool", args={})
+            await tool_queue.put(StreamingToolCall(tool_call=tc))
+            await asyncio.sleep(0.05)
+            events["generate_return"] = time.monotonic()
+            await tool_queue.put(StreamingToolCall(is_final=True))
+            return BackendResponse(content="", tool_calls=[tc], stop_reason="tool_use")
+
+    spec = BatchSpec(
+        task="Do {x}",
+        inputs=[{"x": "a"}],
+        output_schema=Payload,
+        max_turns=2,
+        tools=[Tool.registry["stream_timing_tool"]],
+        streaming_tool_dispatch=True,
+    )
+
+    results = asyncio.run(WaveScheduler(TaskCompiler().compile(spec), StreamingBackend()).run())
+
+    assert results[0].ok
+    assert events["tool_start"] < events["generate_return"]
+
+
+def test_streaming_tool_dispatch_disabled_waits_for_generate_return() -> None:
+    events: dict[str, float] = {}
+
+    @Tool.define(name="nonstream_timing_tool", cacheable=False)
+    async def nonstream_timing_tool() -> str:
+        events["tool_start"] = time.monotonic()
+        await asyncio.sleep(0.01)
+        return "ok"
+
+    class NonStreamingBackend(BackendAdapter):
+        async def generate(self, *, shared: SharedContext, job: AgentJob, messages: list[Message] | None = None, model: str, tools=None, timeout: float | None = None) -> BackendResponse:
+            await asyncio.sleep(0.05)
+            if messages and any(m.role == "tool_result" for m in messages):
+                return BackendResponse(content='{"value": "done"}', stop_reason="end_turn")
+            events["generate_return"] = time.monotonic()
+            tc = ParsedToolCall(id="call_1", name="nonstream_timing_tool", args={})
+            return BackendResponse(content="", tool_calls=[tc], stop_reason="tool_use")
+
+    spec = BatchSpec(
+        task="Do {x}",
+        inputs=[{"x": "a"}],
+        output_schema=Payload,
+        max_turns=2,
+        tools=[Tool.registry["nonstream_timing_tool"]],
+        streaming_tool_dispatch=False,
+    )
+
+    results = asyncio.run(WaveScheduler(TaskCompiler().compile(spec), NonStreamingBackend()).run())
+
+    assert results[0].ok
+    assert events["tool_start"] > events["generate_return"]

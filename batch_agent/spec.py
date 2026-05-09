@@ -80,6 +80,7 @@ class BatchSpec:
     diff_kv: bool = False
     kvflow: bool = True
     strip_preamble: bool = True
+    streaming_tool_dispatch: bool = True
     predictive_prewarm: bool = False
     checkpoint_dir: str | Path | None = None
     no_hoist: bool = False

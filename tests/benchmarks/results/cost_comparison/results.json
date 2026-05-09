@@ -1,0 +1,43 @@
+{
+  "parameters": {
+    "cache_hit_rate": 0.968,
+    "input_tokens": 3000,
+    "model": "sonnet-4.6",
+    "n": 100,
+    "output_tokens": 500
+  },
+  "pricing": {
+    "batch_discount": 0.5,
+    "cache_read_multiplier": 0.1,
+    "sonnet_input_per_mtok": 3.0,
+    "sonnet_output_per_mtok": 15.0,
+    "vllm_agents_per_hour": 19800.0,
+    "vllm_gpu_cost_per_hour": 0.805
+  },
+  "rows": [
+    {
+      "cost_usd": 1.65,
+      "name": "Naive API",
+      "note": "Parallel API calls, no cache discount.",
+      "relative_to_naive": 1.0
+    },
+    {
+      "cost_usd": 0.825,
+      "name": "Anthropic Batch API",
+      "note": "No tool calls, single turn only.",
+      "relative_to_naive": 0.5
+    },
+    {
+      "cost_usd": 0.86592,
+      "name": "BatchAgent + API caching",
+      "note": "Uses measured 96.8% cache hit rate.",
+      "relative_to_naive": 0.5248
+    },
+    {
+      "cost_usd": 0.004065656565656566,
+      "name": "BatchAgent + self-hosted vLLM",
+      "note": "L4 at $0.805/hr, 19800 agents/hr.",
+      "relative_to_naive": 0.0024640342822161007
+    }
+  ]
+}

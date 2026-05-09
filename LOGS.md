@@ -23,6 +23,22 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Added `tests/unit/test_claude_code_tool.py` covering success, nonzero return code, and `FileNotFoundError`.
 - Targeted validation: `python3 -m pytest tests/unit/test_claude_code_tool.py -q` passed with `3 passed`.
 
+### Cost comparison benchmark script — 2026-05-09
+
+- Added `tests/benchmarks/cost_comparison.py` with pricing constants for Sonnet input/output, cache-read multiplier, Anthropic Batch discount, L4 hourly cost, and measured vLLM agents/hour from the real benchmark.
+- The script writes `tests/benchmarks/results/cost_comparison/results.json`, prints a Markdown table by default, and supports `--latex`.
+- Ran `python3 tests/benchmarks/cost_comparison.py`; output:
+
+| Mode | Cost / batch | Relative | Note |
+|---|---:|---:|---|
+| Naive API | $1.6500 | 1.000x | Parallel API calls, no cache discount. |
+| Anthropic Batch API | $0.8250 | 0.500x | No tool calls, single turn only. |
+| BatchAgent + API caching | $0.8659 | 0.525x | Uses measured 96.8% cache hit rate. |
+| BatchAgent + self-hosted vLLM | $0.0041 | 0.002x | L4 at $0.805/hr, 19800 agents/hr. |
+
+- Ran `python3 tests/benchmarks/cost_comparison.py --latex`; LaTeX table generation succeeded.
+- Validation: `python3 -m py_compile tests/benchmarks/cost_comparison.py` passed.
+
 - Read `AGENTS.md` in full before writing code, per instruction. The repo only contained `AGENTS.md` and `LOGS.md`, so the implementation scope became a Phase 0 foundation rather than patching existing code.
 - Implemented package metadata, public API, compiler/state dataclasses, backend adapters, one-shot scheduler, tool definitions/pool/builtins, JSON repair, CLI, and unit tests aligned to Phase 0.
 - Design choice: `BatchAgent.run()` currently returns `AgentResult` objects instead of raw schema objects. This preserves the spec principle that failures are data, but it is not yet the final ergonomic target shown in `AGENTS.md` where successful runs return plain structured outputs.

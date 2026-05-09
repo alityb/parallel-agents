@@ -113,6 +113,16 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Added sections for AutoResearch, NVIDIA Dynamo compatibility, and `Tool.claude_code`.
 - Kept the honest benchmark, cost, backend, limitation, and roadmap sections, including the KVFlow prefetch blocker and the blocked live AutoResearch run.
 
+### Wheel rebuild v0.2.0 — 2026-05-09
+
+- Bumped `pyproject.toml` version from `0.1.0` to `0.2.0`.
+- Added `examples/` to both wheel force-include and sdist include so `examples/auto_research.py` is shipped.
+- Ran `python3 -m build`; produced `dist/batch_agent-0.2.0.tar.gz` and `dist/batch_agent-0.2.0-py3-none-any.whl`.
+- Ran `python3 -m twine check dist/*`; both artifacts passed.
+- Wheel verification: `batch_agent/backends/dynamo.py`, `batch_agent/tools/builtin.py`, and `examples/auto_research.py` are present; `batch_agent/tools/builtin.py` contains `async def claude_code`.
+- The wheel contains all current package modules: 30 Python files under `batch_agent/` in the source tree and 30 in the wheel.
+- Publish command after final live benchmark approval: `python3 -m twine upload --repository pypi dist/batch_agent-0.2.0-py3-none-any.whl dist/batch_agent-0.2.0.tar.gz`.
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

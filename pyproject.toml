@@ -1,6 +1,6 @@
 [project]
 name = "batch-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "High-throughput parallel LLM agent execution with tool deduplication, structured output, and self-hosted inference support."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -64,6 +64,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["batch_agent"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"examples" = "examples"
+
 [tool.hatch.build.targets.sdist]
 include = [
     "batch_agent/",
@@ -72,6 +75,7 @@ include = [
     "AGENTS.md",
     "LOGS.md",
     "deploy/",
+    "examples/",
     "pyproject.toml",
     "MANIFEST.in",
 ]

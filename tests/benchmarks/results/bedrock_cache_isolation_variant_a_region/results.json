@@ -1,0 +1,168 @@
+{
+  "benchmark": "bedrock_cache_isolation",
+  "cache_hit_lower_than_miss": true,
+  "cache_read_input_tokens_requests_2_10": 65079,
+  "cache_write_input_tokens_request_1": 7231,
+  "finding": "cache_hit_ttft_lower_than_cache_miss",
+  "hit_to_miss_ttft_ratio": 0.9680364679383222,
+  "model": "us.anthropic.claude-opus-4-5-20251101-v1:0",
+  "parallel_cache_hits": false,
+  "records": [
+    {
+      "cache_mode": "write",
+      "request_index": 1,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 2.925521500175819,
+      "usage": {
+        "cacheDetails": [
+          {
+            "inputTokens": 7231,
+            "ttl": "5m"
+          }
+        ],
+        "cacheReadInputTokens": 0,
+        "cacheWriteInputTokens": 7231,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7259
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 2,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 2.8216607079375535,
+      "usage": {
+        "cacheReadInputTokens": 7231,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7259
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 3,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 2.7852474581450224,
+      "usage": {
+        "cacheReadInputTokens": 7231,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7259
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 4,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 2.6850665411911905,
+      "usage": {
+        "cacheReadInputTokens": 7231,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7259
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 5,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 2.8004104159772396,
+      "usage": {
+        "cacheReadInputTokens": 7231,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7259
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 6,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 2.8320114999078214,
+      "usage": {
+        "cacheReadInputTokens": 7231,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7259
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 7,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 10.693009958136827,
+      "usage": {
+        "cacheReadInputTokens": 7231,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7259
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 8,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 12.381516915978864,
+      "usage": {
+        "cacheReadInputTokens": 7231,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7259
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 9,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 14.478338540997356,
+      "usage": {
+        "cacheReadInputTokens": 7231,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7259
+      }
+    },
+    {
+      "cache_mode": "read",
+      "request_index": 10,
+      "response_preview": "{\"ok\": true}",
+      "ttft_seconds": 9.389450875110924,
+      "usage": {
+        "cacheReadInputTokens": 7231,
+        "cacheWriteInputTokens": 0,
+        "inputTokens": 20,
+        "outputTokens": 8,
+        "totalTokens": 7259
+      }
+    }
+  ],
+  "region": "us-west-2",
+  "request_1_cache_mode": "write",
+  "requests": 10,
+  "requests_2_10_cache_modes": [
+    "read",
+    "read",
+    "read",
+    "read",
+    "read",
+    "read",
+    "read",
+    "read",
+    "read"
+  ],
+  "system_prompt_estimated_tokens": 1201,
+  "ttft_cache_hit_requests_2_10_p50_seconds": 2.8320114999078214,
+  "ttft_cache_hit_requests_2_10_p95_seconds": 14.478338540997356,
+  "ttft_cache_miss_request_1_p50_seconds": 2.925521500175819,
+  "ttft_delta_hit_minus_miss_seconds": -0.09351000026799738,
+  "wall_clock_seconds": 64.70386979193427
+}

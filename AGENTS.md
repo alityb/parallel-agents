@@ -784,6 +784,16 @@ async def get_paper_metadata(paper_id: int) -> PaperMeta:
 | Cross-node KV sharing (LMCache) | ❌ | ❌ | ✅ |
 | 1,000-agent benchmark | ❌ | ❌ | ✅ |
 
+### 9.1 Bedrock Mode Findings
+
+| Capability | Bedrock mode |
+|---|---|
+| Prompt cache token savings | ✅ confirmed |
+| Prompt cache latency savings | ❌ queue latency dominates at <8K tokens |
+| KVFlow / TokenDance | ❌ managed service, no KV access |
+| Reliability vs naive | ✅ 0% vs 35% failure rate |
+| Max practical concurrency | 1–3 (quota-limited) |
+
 ---
 
 ## 10. Success Definition

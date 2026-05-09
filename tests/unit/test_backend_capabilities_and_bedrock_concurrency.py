@@ -9,6 +9,8 @@ from batch_agent.backends.vllm import VLLMBackend
 def test_backend_capabilities_declared() -> None:
     assert BedrockBackend().backend_capabilities() == {
         "prefix_pinning": False,
+        "prompt_cache_token_savings": True,
+        "prompt_cache_latency_benefit": False,
         "kvflow": False,
         "diff_kv": False,
         "max_safe_concurrent": 1,

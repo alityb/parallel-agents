@@ -289,8 +289,14 @@ class BedrockBackend(BackendAdapter):
         logger.debug("send_prefetch_hints: no-op for Bedrock backend (%d hints ignored)", len(hints))
 
     def backend_capabilities(self) -> dict[str, Any]:
+        # See LOGS.md "Authoritative Bedrock cache latency isolation".
+        # Bedrock cachePoint produced confirmed cache token reads/writes, but
+        # cache-hit TTFT was not lower for a ~1,200-token prefix because managed
+        # queue/model latency dominated observed first-token latency.
         return {
             "prefix_pinning": False,
+            "prompt_cache_token_savings": True,
+            "prompt_cache_latency_benefit": False,
             "kvflow": False,
             "diff_kv": False,
             "max_safe_concurrent": self.concurrency_controller.current_limit,

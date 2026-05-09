@@ -26,6 +26,7 @@ class AnthropicBackend(BackendAdapter):
         messages: list[Message] | None = None,
         model: str,
         tools: list[dict[str, Any]] | None = None,
+        metadata: dict[str, Any] | None = None,
         timeout: float | None = None,
     ) -> BackendResponse:
         if not self.api_key:

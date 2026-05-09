@@ -104,17 +104,18 @@ class SGLangBackend(OpenAIBackend):
         messages: list[Message] | None = None,
         model: str,
         tools: list[dict[str, Any]] | None = None,
+        metadata: dict[str, Any] | None = None,
         timeout: float | None = None,
     ) -> BackendResponse:
         if self.use_native:
             return await self._generate_native(
                 shared=shared, job=job, messages=messages,
-                model=model, tools=tools, timeout=timeout,
+                model=model, tools=tools, metadata=metadata, timeout=timeout,
             )
         # Default: OpenAI-compat path
         return await super().generate(
             shared=shared, job=job, messages=messages,
-            model=model, tools=tools, timeout=timeout,
+            model=model, tools=tools, metadata=metadata, timeout=timeout,
         )
 
     async def _generate_native(
@@ -125,6 +126,7 @@ class SGLangBackend(OpenAIBackend):
         messages: list[Message] | None = None,
         model: str,
         tools: list[dict[str, Any]] | None = None,
+        metadata: dict[str, Any] | None = None,
         timeout: float | None = None,
     ) -> BackendResponse:
         """SGLang native /generate endpoint.
@@ -202,7 +204,7 @@ class SGLangBackend(OpenAIBackend):
             logger.debug("SGLang get_cache_metrics failed: %s", e)
             return {}
 
-    async def send_prefetch_hints(self, hints: list[dict[str, Any]]) -> None:
+    async def send_prefetch_hints(self, hints: list[Any]) -> None:
         """Send KVFlow prefetch hints to SGLang's RadixAttention tree.
 
         Calls POST /internal/prefetch_radix — promotes context subtrees in the
@@ -212,11 +214,12 @@ class SGLangBackend(OpenAIBackend):
         """
         if not hints:
             return
+        payload_hints = [h.to_dict() if hasattr(h, "to_dict") else h for h in hints]
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.post(
                     f"{self.base_url}/internal/prefetch_radix",
-                    json={"hints": hints},
+                    json={"hints": payload_hints},
                     headers={"authorization": f"Bearer {self.api_key}"},
                 )
                 if response.status_code != 200:

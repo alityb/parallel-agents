@@ -109,7 +109,7 @@ class VLLMBackend(OpenAIBackend):
             logger.debug("get_cache_metrics failed: %s", e)
             return {}
 
-    async def send_prefetch_hints(self, hints: list[dict[str, Any]]) -> None:
+    async def send_prefetch_hints(self, hints: list[Any]) -> None:
         """Send KVFlow prefetch hints to vLLM /internal/prefetch.
 
         Requires vllm_patch/prefetch_route.py installed on the vLLM server.
@@ -117,11 +117,12 @@ class VLLMBackend(OpenAIBackend):
         """
         if not hints:
             return
+        payload_hints = [h.to_dict() if hasattr(h, "to_dict") else h for h in hints]
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.post(
                     f"{self.base_url}/internal/prefetch",
-                    json={"hints": hints},
+                    json={"hints": payload_hints},
                     headers={"authorization": f"Bearer {self.api_key}"},
                 )
                 if response.status_code != 200:

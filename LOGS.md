@@ -174,3 +174,15 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Covered async `on_result` callback behavior.
 - Covered dynamic priority ordering via `PrioritySemaphore`: a near-complete agent with lower turns remaining is served before a fresh job.
 - Full pytest suite after these changes: 48 passed.
+
+### Phase 3A KVFlow Advisor — 2026-05-09
+
+- Added `batch_agent/kvflow.py` with `PrefetchHint` and `KVFlowAdvisor`.
+- `KVFlowAdvisor` scans `AgentState` objects in `TOOL_WAIT`, estimates `steps_to_execution` from ToolPool P75 latency, updates `estimated_next_activation`, and emits hints sorted by shortest ETA first.
+- Scheduler now starts a KVFlow advisor task when `BatchSpec.kvflow=True`.
+- Scheduler emits an immediate KVFlow hint batch when an agent enters `TOOL_WAIT`; this prevents short 300ms tool waits from being missed by the 500ms background interval.
+- Scheduler passes `metadata={"kv_key": state.kv_key, "job_id": state.job_id}` to backends that accept a `metadata` parameter, allowing vLLM/SGLang adapters to track per-agent KV identity.
+- Added default no-op `send_prefetch_hints()` to `BackendAdapter`; vLLM and SGLang adapters serialize `PrefetchHint` objects to `/internal/prefetch` or `/internal/prefetch_radix` payloads.
+- Added `tests/unit/test_kvflow_advisor.py`: verifies ETA ordering and horizon filtering.
+- Added `tests/integration/test_prefetch_accuracy.py`: 20 agents, 3 turns, simulated 300ms tool waits, mock backend records prefetch hits; target ≥80% hit rate passes.
+- Full pytest suite after KVFlow changes: 50 passed.

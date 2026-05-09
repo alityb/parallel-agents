@@ -139,6 +139,7 @@ class BedrockBackend(BackendAdapter):
         messages: list[Message] | None = None,
         model: str,
         tools: list[dict[str, Any]] | None = None,
+        metadata: dict[str, Any] | None = None,
         timeout: float | None = None,
     ) -> BackendResponse:
         # Model resolution: explicit call wins over URL override

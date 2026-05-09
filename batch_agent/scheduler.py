@@ -26,6 +26,7 @@ from typing import Any
 
 from .backends import BackendAdapter, BackendResponse, ParsedToolCall
 from .compaction import compact_messages_async, should_compact
+from .kvflow import KVFlowAdvisor
 from .metrics import SchedulerMetrics
 from .priority_semaphore import PrioritySemaphore
 from .repair import parse_and_validate_output
@@ -66,6 +67,7 @@ class WaveScheduler:
         self._tool_schemas = self._build_tool_schemas(self._tools)
         # kv_key for the shared prefix (set after warm_prefix, stored on each state)
         self._shared_kv_key: str | None = None
+        self._kvflow_advisor: KVFlowAdvisor | None = None
         # Checkpoint store for crash recovery and per-turn saves
         self._checkpoint = None
         if plan.spec.checkpoint_dir:
@@ -131,6 +133,17 @@ class WaveScheduler:
         adaptive_task = asyncio.create_task(
             self._adaptive_concurrency_loop(), name="adaptive-concurrency"
         )
+        kvflow_task = None
+        if self.plan.spec.kvflow:
+            self._kvflow_advisor = KVFlowAdvisor(
+                    state_store=self.states,
+                    tool_pool=self.tool_pool,
+                    backend=self.backend,
+                )
+            kvflow_task = asyncio.create_task(
+                self._kvflow_advisor.run(),
+                name="kvflow-advisor",
+            )
 
         # Yield previously completed results immediately
         for sr in skipped_results:
@@ -152,9 +165,14 @@ class WaveScheduler:
                 yield item
         finally:
             adaptive_task.cancel()
+            if kvflow_task:
+                kvflow_task.cancel()
             dispatcher.cancel()
             try:
-                await asyncio.gather(adaptive_task, dispatcher, return_exceptions=True)
+                cancel_tasks = [adaptive_task, dispatcher]
+                if kvflow_task:
+                    cancel_tasks.append(kvflow_task)
+                await asyncio.gather(*cancel_tasks, return_exceptions=True)
             except Exception:
                 pass
             if tasks:
@@ -262,14 +280,7 @@ class WaveScheduler:
             t_generate = time.monotonic()
             try:
                 response = await asyncio.wait_for(
-                    self.backend.generate(
-                        shared=self.plan.shared,
-                        job=job,
-                        messages=state.messages,
-                        model=self.plan.spec.model,
-                        tools=self._tool_schemas if self._tools else None,
-                        timeout=self.plan.spec.timeout_per_agent,
-                    ),
+                    self._generate_with_metadata(job, state),
                     timeout=self.plan.spec.timeout_per_turn,
                 )
             finally:
@@ -323,6 +334,11 @@ class WaveScheduler:
                     "[%s] turn=%d TOOL_WAIT: %d tool calls (semaphore free)",
                     job.job_id, state.turn, len(response.tool_calls),
                 )
+
+                # KVFlow: emit an immediate hint batch on TOOL_WAIT entry so short
+                # tool waits (e.g. 300ms) are not missed by the 500ms background tick.
+                if self._kvflow_advisor:
+                    await self._kvflow_advisor.emit_once()
 
                 t_tool = time.monotonic()
                 tool_result_blocks = await self._execute_tool_calls(response.tool_calls)
@@ -422,6 +438,20 @@ class WaveScheduler:
 
         # Execute all calls concurrently (they're all in TOOL_WAIT, semaphore is free)
         return list(await asyncio.gather(*[_one(tc) for tc in tool_calls]))
+
+    async def _generate_with_metadata(self, job: AgentJob, state: AgentState) -> BackendResponse:
+        """Call backend.generate and pass kv_key metadata when supported."""
+        kwargs: dict[str, Any] = {
+            "shared": self.plan.shared,
+            "job": job,
+            "messages": state.messages,
+            "model": self.plan.spec.model,
+            "tools": self._tool_schemas if self._tools else None,
+            "timeout": self.plan.spec.timeout_per_agent,
+        }
+        if "metadata" in inspect.signature(self.backend.generate).parameters:
+            kwargs["metadata"] = {"kv_key": state.kv_key, "job_id": state.job_id}
+        return await self.backend.generate(**kwargs)
 
     # ── adaptive concurrency (Drift 3) ─────────────────────────────────────────
 

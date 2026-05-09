@@ -47,6 +47,7 @@ class BackendAdapter(ABC):
         messages: list[Message] | None = None,
         model: str,
         tools: list[dict[str, Any]] | None = None,
+        metadata: dict[str, Any] | None = None,
         timeout: float | None = None,
     ) -> BackendResponse:
         raise NotImplementedError
@@ -65,6 +66,14 @@ class BackendAdapter(ABC):
         vLLM override polls /v1/metrics (Prometheus text format).
         """
         return {}
+
+    async def send_prefetch_hints(self, hints: list[Any]) -> None:
+        """Send KVFlow prefetch hints. API/managed backends no-op by default."""
+        return None
+
+    async def send_prefetch_hints(self, hints: list[Any]) -> None:
+        """Send KVFlow prefetch hints. Managed/API backends no-op by default."""
+        return None
 
 
 def backend_from_url(url: str) -> BackendAdapter:

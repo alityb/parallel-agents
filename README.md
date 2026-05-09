@@ -126,6 +126,23 @@ Sources: `config_d_20`, `config_d_200`, `config_e_200`, `fair_comparison_live` r
 
 ---
 
+## Cost
+
+Source: `tests/benchmarks/results/cost_comparison/results.json`
+
+Cost comparison for N=100, input=3000 tokens, output=500 tokens, model=sonnet-4.6
+
+| Mode | Cost / batch | Relative | Note |
+|---|---:|---:|---|
+| Naive API | $1.6500 | 1.000x | Parallel API calls, no cache discount. |
+| Anthropic Batch API | $0.8250 | 0.500x | No tool calls, single turn only. |
+| BatchAgent + API caching | $0.8659 | 0.525x | Uses measured 96.8% cache hit rate. |
+| BatchAgent + self-hosted vLLM | $0.0041 | 0.002x | L4 at $0.805/hr, 19800 agents/hr. |
+
+Batch API cost assumes single-turn, no tool calls. BatchAgent supports multi-turn tool calls at the caching price.
+
+---
+
 ## How it works
 
 ```

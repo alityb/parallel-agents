@@ -39,6 +39,13 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Ran `python3 tests/benchmarks/cost_comparison.py --latex`; LaTeX table generation succeeded.
 - Validation: `python3 -m py_compile tests/benchmarks/cost_comparison.py` passed.
 
+### README cost section — 2026-05-09
+
+- Added a `README.md` cost section between Benchmarks and How it works.
+- The table is copied from `python3 tests/benchmarks/cost_comparison.py` output and cites `tests/benchmarks/results/cost_comparison/results.json` as source.
+- Added the required caveat: Anthropic Batch API cost assumes single-turn, no tool calls; BatchAgent supports multi-turn tool calls at the caching price.
+- Number trace check passed against `tests/benchmarks/results/cost_comparison/results.json`: `$1.6500`, `$0.8250`, `$0.8659`, `$0.0041`, `1.000x`, `0.500x`, `0.525x`, `0.002x`, `96.8%`, `$0.805/hr`, `19800 agents/hr`, `N=100`, `3000`, `500`, and `sonnet-4.6`.
+
 - Read `AGENTS.md` in full before writing code, per instruction. The repo only contained `AGENTS.md` and `LOGS.md`, so the implementation scope became a Phase 0 foundation rather than patching existing code.
 - Implemented package metadata, public API, compiler/state dataclasses, backend adapters, one-shot scheduler, tool definitions/pool/builtins, JSON repair, CLI, and unit tests aligned to Phase 0.
 - Design choice: `BatchAgent.run()` currently returns `AgentResult` objects instead of raw schema objects. This preserves the spec principle that failures are data, but it is not yet the final ergonomic target shown in `AGENTS.md` where successful runs return plain structured outputs.

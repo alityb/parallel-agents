@@ -23,6 +23,7 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 + source ~/vllm-env/bin/activate
 + pip install -e "$REPO[test,redis]" --quiet
 + pip install setuptools_scm wheel packaging jinja2 cmake ninja --quiet
++ pip install transformers==4.48.3 --quiet
 + if [ "\${VLLM_INSTALL_MODE:-wheel}" = "source" ]; then clone/build vLLM v0.6.6 from source; else pip install vllm==0.6.6.post1; fi
 + VLLM_SRC=\$(python3 - <<'PY' ...) python3 $SCRIPT_DIR/apply_vllm_patch.py
 + cd $REPO
@@ -73,6 +74,7 @@ echo "=========================================================="
 # Install our SDK plus test/Redis dependencies used later in this session.
 pip install -e "$REPO[test,redis]" --quiet
 pip install setuptools_scm wheel packaging jinja2 cmake ninja --quiet
+pip install transformers==4.48.3 --quiet
 
 if [ "$VLLM_INSTALL_MODE" = "source" ]; then
     # Clone vLLM 0.6.6 if not present

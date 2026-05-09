@@ -21,10 +21,12 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 + [ -d ~/vllm-env ] || python3 -m venv ~/vllm-env
 + source ~/vllm-env/bin/activate
 + pip install -e "$REPO[test,redis]" --quiet
-+ pip install setuptools_scm wheel packaging --quiet
++ pip install setuptools_scm wheel packaging jinja2 cmake ninja --quiet
 + [ -d ~/vllm-src ] || git clone --depth 1 --branch v0.6.6 https://github.com/vllm-project/vllm ~/vllm-src
 + cd ~/vllm-src
 + python3 $SCRIPT_DIR/apply_vllm_patch.py
++ python3 - <<'PY'  # normalize Torch CUDAException.h line-number cast if needed
++ rm -rf build vllm/*.so vllm/*.abi3.so
 + pip install -e . --no-build-isolation --quiet
 + tmux kill-session -t vllm
 + tmux new-session -d -s vllm 'python -m vllm.entrypoints.openai.api_server --model $MODEL --host 0.0.0.0 --port 8000 --enable-prefix-caching --gpu-memory-utilization 0.85 --max-model-len 8192 --dtype bfloat16 --enable-auto-tool-choice --tool-call-parser hermes --disable-frontend-multiprocessing'
@@ -72,7 +74,7 @@ echo "=========================================================="
 
 # Install our SDK plus test/Redis dependencies used later in this session.
 pip install -e "$REPO[test,redis]" --quiet
-pip install setuptools_scm wheel packaging --quiet
+pip install setuptools_scm wheel packaging jinja2 cmake ninja --quiet
 
 # Clone vLLM 0.6.6 if not present
 if [ ! -d ~/vllm-src ]; then
@@ -83,7 +85,26 @@ cd ~/vllm-src
 # Apply the prefetch + pin_blocks patch to the API server
 python3 $REPO/deploy/apply_vllm_patch.py
 
+# Torch 2.5.1's CUDAException.h can cast __LINE__ to uint32_t while the
+# packaged libc10_cuda exports the int overload. Normalize before compiling
+# vLLM extensions so _C.abi3.so resolves c10_cuda_check_implementation.
+python3 - <<'PY'
+from pathlib import Path
+import torch
+
+header = Path(torch.__file__).resolve().parent / "include/c10/cuda/CUDAException.h"
+text = header.read_text()
+old = "static_cast<uint32_t>(__LINE__)"
+new = "static_cast<int32_t>(__LINE__)"
+if old in text:
+    header.write_text(text.replace(old, new))
+    print(f"Patched {header}")
+else:
+    print(f"No Torch CUDA header patch needed for {header}")
+PY
+
 # Build and install
+rm -rf build vllm/*.so vllm/*.abi3.so
 pip install -e . --no-build-isolation --quiet
 
 # Start patched vLLM

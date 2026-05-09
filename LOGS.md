@@ -87,6 +87,18 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 | BatchAgent + self-hosted vLLM | $0.0041 | 0.002x | L4 at $0.805/hr, 19800 agents/hr. |
 | BatchAgent + NVIDIA Dynamo | $0.0041 | 0.002x | Same L4 cost model as vLLM; nvext_agent_hints benefit is scheduling, not pricing. |
 
+### v2 benchmark rerun — 2026-05-09
+
+- Updated `tests/benchmarks/paper_summarization.py` to accept `--configs`, `--n`, and `--mock`, then ran:
+  `PYTHONPATH=. python3 tests/benchmarks/paper_summarization.py --configs D,E,F --n 50,100,200 --mock --output tests/benchmarks/results/v2_benchmark/results.json`
+- Result JSON written to `tests/benchmarks/results/v2_benchmark/results.json`.
+- Mock v2 rows:
+  - D N=50/100/200: wall `0.185s` / `0.310s` / `0.560s`, cache hit `78.0%` / `86.0%` / `91.0%`.
+  - E N=50/100/200: wall `1.159s` / `2.059s` / `3.859s`, cache hit `96.8%`.
+  - F N=50/100/200: wall `1.159s` / `2.059s` / `3.859s`, cache hit `96.8%`; KVFlow prefetch-specific improvement remains `0.0s`.
+- Streaming dispatch improvement recorded in the benchmark summary: `0.101s` overlap from the W16 mock timing probe.
+- Regression note: no regression vs the intended W15/W16 mock expectations. F is intentionally equal to E because KVFlow prefetch is still blocked pending vLLM scheduler integration.
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

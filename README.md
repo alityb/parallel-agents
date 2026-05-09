@@ -124,6 +124,24 @@ Sources: `config_d_20`, `config_d_200`, `config_e_200`, `fair_comparison_live` r
 - D naive N=200: did not OOM — vLLM queued all 200 simultaneously
 - TTFT P50 degradation N=20→200: **4.7×** (0.208s → 0.979s) from queue depth
 
+### v2 mock benchmark — W15/W16/Dynamo-era code
+
+Source: `tests/benchmarks/results/v2_benchmark/results.json`
+
+| Config | N | Wall | agents/s | Cache hit% | Note |
+|---|---:|---:|---:|---:|---|
+| D | 50 | 0.185s | 270.3 | 78.0% | naive one-turn mock |
+| D | 100 | 0.310s | 322.6 | 86.0% | naive one-turn mock |
+| D | 200 | 0.560s | 357.1 | 91.0% | naive one-turn mock |
+| E | 50 | 1.159s | 43.1 | 96.8% | BatchAgent native mock with W15/W16 |
+| E | 100 | 2.059s | 48.6 | 96.8% | BatchAgent native mock with W15/W16 |
+| E | 200 | 3.859s | 51.8 | 96.8% | BatchAgent native mock with W15/W16 |
+| F | 50 | 1.159s | 43.1 | 96.8% | KVFlow hints only; prefetch blocked |
+| F | 100 | 2.059s | 48.6 | 96.8% | KVFlow hints only; prefetch blocked |
+| F | 200 | 3.859s | 51.8 | 96.8% | KVFlow hints only; prefetch blocked |
+
+The v2 mock records `0.101s` streaming tool-dispatch overlap and `96.8%` cache hit rate with billing-header stripping. It does **not** claim KVFlow prefetch speedup; F is equal to E until vLLM scheduler integration is implemented.
+
 ---
 
 ## Cost

@@ -1,0 +1,123 @@
+{
+  "benchmark": "paper_summarization",
+  "mode": "mock",
+  "rows": [
+    {
+      "config": "D",
+      "failed": 0,
+      "kvflow_prefetch_specific_improvement_seconds": null,
+      "n": 50,
+      "note": "naive one-turn mock",
+      "ok": 50,
+      "prefix_cache_hit_rate": 0.78,
+      "streaming_tool_dispatch_savings_seconds": 0.0,
+      "throughput_agents_per_sec": 270.2703,
+      "wall_clock_seconds": 0.185
+    },
+    {
+      "config": "D",
+      "failed": 0,
+      "kvflow_prefetch_specific_improvement_seconds": null,
+      "n": 100,
+      "note": "naive one-turn mock",
+      "ok": 100,
+      "prefix_cache_hit_rate": 0.86,
+      "streaming_tool_dispatch_savings_seconds": 0.0,
+      "throughput_agents_per_sec": 322.5806,
+      "wall_clock_seconds": 0.31
+    },
+    {
+      "config": "D",
+      "failed": 0,
+      "kvflow_prefetch_specific_improvement_seconds": null,
+      "n": 200,
+      "note": "naive one-turn mock",
+      "ok": 200,
+      "prefix_cache_hit_rate": 0.91,
+      "streaming_tool_dispatch_savings_seconds": 0.0,
+      "throughput_agents_per_sec": 357.1429,
+      "wall_clock_seconds": 0.56
+    },
+    {
+      "config": "E",
+      "failed": 0,
+      "kvflow_prefetch_specific_improvement_seconds": null,
+      "n": 50,
+      "note": "BatchAgent native mock with W15/W16",
+      "ok": 50,
+      "prefix_cache_hit_rate": 0.968,
+      "streaming_tool_dispatch_savings_seconds": 0.101,
+      "throughput_agents_per_sec": 43.1406,
+      "wall_clock_seconds": 1.159
+    },
+    {
+      "config": "E",
+      "failed": 0,
+      "kvflow_prefetch_specific_improvement_seconds": null,
+      "n": 100,
+      "note": "BatchAgent native mock with W15/W16",
+      "ok": 100,
+      "prefix_cache_hit_rate": 0.968,
+      "streaming_tool_dispatch_savings_seconds": 0.101,
+      "throughput_agents_per_sec": 48.5673,
+      "wall_clock_seconds": 2.059
+    },
+    {
+      "config": "E",
+      "failed": 0,
+      "kvflow_prefetch_specific_improvement_seconds": null,
+      "n": 200,
+      "note": "BatchAgent native mock with W15/W16",
+      "ok": 200,
+      "prefix_cache_hit_rate": 0.968,
+      "streaming_tool_dispatch_savings_seconds": 0.101,
+      "throughput_agents_per_sec": 51.8269,
+      "wall_clock_seconds": 3.859
+    },
+    {
+      "config": "F",
+      "failed": 0,
+      "kvflow_prefetch_specific_improvement_seconds": 0.0,
+      "n": 50,
+      "note": "KVFlow hints emitted; prefetch benefit blocked pending vLLM scheduler integration",
+      "ok": 50,
+      "prefix_cache_hit_rate": 0.968,
+      "streaming_tool_dispatch_savings_seconds": 0.101,
+      "throughput_agents_per_sec": 43.1406,
+      "wall_clock_seconds": 1.159
+    },
+    {
+      "config": "F",
+      "failed": 0,
+      "kvflow_prefetch_specific_improvement_seconds": 0.0,
+      "n": 100,
+      "note": "KVFlow hints emitted; prefetch benefit blocked pending vLLM scheduler integration",
+      "ok": 100,
+      "prefix_cache_hit_rate": 0.968,
+      "streaming_tool_dispatch_savings_seconds": 0.101,
+      "throughput_agents_per_sec": 48.5673,
+      "wall_clock_seconds": 2.059
+    },
+    {
+      "config": "F",
+      "failed": 0,
+      "kvflow_prefetch_specific_improvement_seconds": 0.0,
+      "n": 200,
+      "note": "KVFlow hints emitted; prefetch benefit blocked pending vLLM scheduler integration",
+      "ok": 200,
+      "prefix_cache_hit_rate": 0.968,
+      "streaming_tool_dispatch_savings_seconds": 0.101,
+      "throughput_agents_per_sec": 51.8269,
+      "wall_clock_seconds": 3.859
+    }
+  ],
+  "status": "ok",
+  "summary": {
+    "cache_hit_rate_with_billing_header_fix": 0.968,
+    "kvflow_note": "F emits hints, but prefetch-specific speedup remains blocked pending vLLM scheduler integration.",
+    "kvflow_prefetch_confirmed": false,
+    "streaming_tool_dispatch_savings_seconds": 0.101
+  },
+  "timestamp": 1778356667.356682,
+  "wall_clock_seconds": 0.0
+}

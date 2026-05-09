@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from batch_agent.state import AgentState, AgentStatus, RedisStreamsStateStore
+from batch_agent.state import AgentState, AgentStatus, RedisStreamsStateStore, _redis_ttl_kwargs
 
 
 class MockRedis:
@@ -62,3 +62,9 @@ def test_two_nodes_lease_and_optimistic_locking() -> None:
     # After lease expiry, another node can pick up the job.
     time.sleep(1.05)
     assert node_b.acquire_lease("job-1", ttl_seconds=1.0) is True
+
+
+def test_redis_ttl_kwargs_never_passes_float_ex() -> None:
+    assert _redis_ttl_kwargs(2.0) == {"ex": 2}
+    assert _redis_ttl_kwargs(2.5) == {"px": 2500}
+    assert _redis_ttl_kwargs(0.001) == {"px": 1}

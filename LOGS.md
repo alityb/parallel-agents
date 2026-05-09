@@ -64,6 +64,13 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - Added mock SGLang coverage for dict-valued tool arguments. This fixes failure mode (b) in the prompt (tool call parsing producing empty/malformed results) in local tests.
 - Live SGLang remains unresolved until rerun against the GPU server with raw response capture. Validation command: `PYTHONPATH=. pytest tests/integration/test_sglang_backend.py -v` while SGLang is running, followed by `PYTHONPATH=. python deploy/sglang_benchmark.py`.
 
+### Redis float TTL verification — 2026-05-09
+
+- Verified `grep -rn "ex=[0-9]*\\.[0-9]" batch_agent/ deploy/` returns no matches.
+- `RedisStreamsStateStore` already routes integer TTLs to `ex=int(seconds)` and fractional TTLs to `px=int(seconds * 1000)`, so redis-py never receives a float `ex=`.
+- Added regression coverage for `_redis_ttl_kwargs(2.0) == {"ex": 2}`, `_redis_ttl_kwargs(2.5) == {"px": 2500}`, and millisecond floor behavior.
+- Local Redis chaos run blocked: no Redis server is listening on `127.0.0.1:6379` and `redis-cli` is not installed in this environment. Mock distributed tests passed; real Redis command remains `python3 deploy/real_redis_chaos.py` after starting localhost Redis.
+
 ### GPU session final status and PagedAttention follow-ups — 2026-05-09
 
 - Real hardware: AWS A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 patched with `/internal/prefetch`, `--disable-frontend-multiprocessing`, bfloat16, max model len 8192.

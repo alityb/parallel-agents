@@ -1,0 +1,18 @@
+{
+  "agents_ok": 20,
+  "cache_after": {
+    "prefix_cache_hit_rate": 0.8633003860201839,
+    "prefix_cache_hit_tokens": 398976.0,
+    "prefix_cache_query_tokens": 462152.0
+  },
+  "cache_before": {
+    "prefix_cache_hit_rate": 0.8609946553450981,
+    "prefix_cache_hit_tokens": 388560.0,
+    "prefix_cache_query_tokens": 451292.0
+  },
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "queue_metrics": {
+    "requests_running": 0,
+    "requests_waiting": 0
+  }
+}

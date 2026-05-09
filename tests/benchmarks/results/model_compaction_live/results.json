@@ -1,0 +1,9 @@
+{
+  "chars_after": 2852,
+  "chars_before": 3497,
+  "latency_seconds": 3.5012344909998774,
+  "mode": "model_based",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "reduction_pct": 18.444380897912495,
+  "summary_preview": "[MODEL SUMMARY of 1 earlier tool results] The ScienceBench NeurIPS2025 evaluation includes 47,200 QA pairs across 18 domains using accuracy as the metric; GPT-4 scores 72.3% and Claude-3-Opus scores 71.1%, while humans achieve 89.4%. Incorporating Co"
+}

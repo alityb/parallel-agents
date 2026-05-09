@@ -1,0 +1,7 @@
+{
+  "agents": 10,
+  "hints_emitted": 60,
+  "note": "Hints sent to /internal/prefetch \u2014 endpoint not in vLLM 0.20 without patch; 404 silently ignored",
+  "ok": 10,
+  "wall_seconds": 4.968849593999948
+}

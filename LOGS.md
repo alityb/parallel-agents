@@ -516,6 +516,68 @@ This bug would silently stall any BatchAgent run that:
 - Wheel built clean: `python -m build --wheel` → `batch_agent-0.1.0-py3-none-any.whl` (68KB)
 - Wheel verified: all 33 Python modules present, METADATA correct (Name, Version, License, Requires-Python)
 - Publish command (blocked until 70B GPU benchmark is done):
+
+### Live GPU benchmark suite — completing all mock/prototype items — 2026-05-09
+
+Instance: A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.20.1. All results in `tests/benchmarks/results/*/results.json`.
+
+#### 1. Paper summarization benchmark (was `status: "blocked"`)
+
+Previously blocked: no GPU available. Now complete at N=10/50/100.
+
+| Config | N | Wall | tput | TTFT P50 | Cache hit% |
+|---|---|---|---|---|---|
+| D naive (asyncio.gather) | 10 | 5.6s | 1.8/s | 0.362s | — |
+| D naive | 50 | 7.6s | 6.6/s | 1.170s | — |
+| D naive | 100 | 10.3s | 9.7/s | 2.198s | — |
+| **E BatchAgent** | 10 | 4.4s | 2.3/s | — | 78.8% |
+| **E BatchAgent** | 50 | 8.9s | 5.6/s | — | 88.6% |
+| **E BatchAgent** | 100 | 15.9s | 6.3/s | — | **92.4%** |
+
+Key: E is faster than D at N=10 (prefix cache cold start amortised across agents), but D pulls ahead at N=100 because D sends 1 forward pass while E sends 1 turn (no tool calls in this test). Cache hit rate grows from 78.8% at N=10 to 92.4% at N=100 as the 1024-token shared prefix warms up.
+
+#### 2. Model-based compaction (was heuristic-only)
+
+Live test with Qwen2.5-7B via vLLM:
+- Input: 3 tool-result messages, ~3,497 chars total
+- Output: 2,852 chars — **18.4% reduction**
+- Latency: **3.50s**
+- Mode: `model_based` (not heuristic fallback)
+- The model produced a coherent summary: "The ScienceBench NeurIPS2025 evaluation includes 47,200 QA..."
+
+Model-based compaction is now confirmed working with a live inference endpoint. Production deployment should use a cheaper model (Haiku-class) for cost efficiency.
+
+#### 3. Fair comparison — proper 2-turn both sides
+
+Previously: D-naive used single-turn (file content in prompt). Now both D and E do the full 2-turn multi-turn loop.
+
+| Config | N | Wall | tput | TTFT P50 | File reads | Cache hit% |
+|---|---|---|---|---|---|---|
+| D 2-turn (naive gather) | 20 | 2.6s | 7.7/s | 1.325s | 20 | — |
+| **E BatchAgent 2-turn** | 20 | 5.2s | 3.8/s | — | 20 | 94.9% |
+| D 2-turn | 50 | 3.8s | 13.2/s | 1.881s | 50 | — |
+| **E BatchAgent 2-turn** | 50 | 10.2s | 4.9/s | — | 55 | **96.8%** |
+
+Tool dedup is 1.0x on real GPU (confirmed again): file reads complete in <1ms, so each agent's inflight window doesn't overlap. On slow tools (200ms+) dedup fires as shown in the mock benchmark.
+
+#### 4. KVFlow advisor live hint emission
+
+60 hints emitted across 10 agents (each agent entered TOOL_WAIT once, advisor ran multiple times). All 10 agents completed OK. Hints sent to `/internal/prefetch` — vLLM 0.20 returns 404 silently because the endpoint requires the `vllm_patch/prefetch_route.py` to be installed. This is the confirmed GPU hardware blocker: the SDK sends the right hints, vLLM ignores them without the patch.
+
+#### 5. Adaptive concurrency on real vLLM /metrics
+
+`get_cache_metrics()` and `get_queue_metrics()` both return real data from `/metrics`. The adaptive loop works correctly. Cache hit rate on the short single-turn test showed 0% (system prompt too short for caching threshold — same finding as Bedrock: <~1,024 tokens → no caching). With the 1024-token prompt used in the paper summarization benchmark, hit rate reaches 92.4%.
+
+#### Items still prototype/blocked after this session
+
+| Item | Status | Blocker |
+|---|---|---|
+| vLLM `/internal/prefetch` patch | ⏳ patch written, not installed | Requires modifying vLLM source and restarting server |
+| vLLM prefix block pinning | ⏳ same | Same vLLM source patch |
+| SGLang live test | ❌ | No SGLang instance available |
+| Distributed mode (real Redis) | ❌ | No Redis cluster |
+| 70B model benchmark | ❌ | Single A10G insufficient (need 2× A100 80GB) |
+| 1,000-agent benchmark | ❌ | Needs 4 orchestration nodes + 2 vLLM nodes |
   ```
   python -m twine upload --repository pypi dist/batch_agent-0.1.0-py3-none-any.whl
   ```

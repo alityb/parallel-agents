@@ -1,0 +1,62 @@
+{
+  "backend": "vllm://localhost:8000",
+  "batchagent": {
+    "failed": 0,
+    "failure_samples": [],
+    "mode": "batchagent",
+    "ok": 100,
+    "throughput_agents_per_sec": 24.24151842650085,
+    "tool_calls_executed": 10,
+    "tool_calls_requested": 100,
+    "usage": {
+      "completion_tokens": 1600,
+      "prompt_tokens": 431420,
+      "total_tokens": 433020
+    },
+    "vllm_request_latency_p50": 0.4299275669999929,
+    "vllm_request_latency_p95": 0.6358492809999916,
+    "vllm_requests": 200,
+    "wall_clock_seconds": 4.125154135999992
+  },
+  "benchmark": "definitive_slow_tool_vllm",
+  "deltas": {
+    "tool_calls_saved_by_batchagent": 90,
+    "total_tokens_batchagent_minus_naive": 19900,
+    "wall_clock_seconds_batchagent_minus_naive": -3.9285346050000385
+  },
+  "max_inflight": 32,
+  "metrics_after_batchagent": {
+    "prefix_cache_hit_rate": 0.9841184565994019,
+    "prefix_cache_hit_tokens": 831648.0,
+    "prefix_cache_query_tokens": 845069.0
+  },
+  "metrics_after_naive": {
+    "prefix_cache_hit_rate": 0.9822317262830482,
+    "prefix_cache_hit_tokens": 404208.0,
+    "prefix_cache_query_tokens": 411520.0
+  },
+  "metrics_before": {},
+  "model": "Qwen/Qwen3-8B",
+  "n": 100,
+  "naive": {
+    "failed": 0,
+    "failure_samples": [],
+    "mode": "naive_asyncio_gather",
+    "ok": 100,
+    "throughput_agents_per_sec": 12.416670573685835,
+    "tool_calls_executed": 100,
+    "tool_calls_requested": 100,
+    "usage": {
+      "completion_tokens": 1600,
+      "prompt_tokens": 411520,
+      "total_tokens": 413120
+    },
+    "vllm_request_latency_p50": 0.5611663590000262,
+    "vllm_request_latency_p95": 1.012808662999987,
+    "vllm_requests": 200,
+    "wall_clock_seconds": 8.05368874100003
+  },
+  "system_prompt_tokens_target": 2048,
+  "timestamp": 1778439330.1561453,
+  "tool_latency_ms": 800.0
+}

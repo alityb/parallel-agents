@@ -13,10 +13,10 @@ from typing import Any
 import httpx
 
 from . import BackendResponse, ParsedToolCall, StreamingToolCall, _http_url_from_scheme
-from .openai import _convert_tools_to_openai, _emit_openai_response, _messages_to_openai
+from .openai import OpenAIBackend, _convert_tools_to_openai, _emit_openai_response, _messages_to_openai
 from .vllm import VLLMBackend
 from ..spec import AgentJob, Message, SharedContext
-from ..utils import DEFAULT_MAX_TOKENS, NO_API_KEY, strip_preamble_headers
+from ..utils import NO_API_KEY, strip_preamble_headers
 
 
 def _build_nvext_hints(job: Any) -> dict[str, Any] | None:
@@ -100,7 +100,11 @@ class DynamoBackend(VLLMBackend):
         hints = _build_nvext_hints_from_metadata(metadata)
         if hints:
             metadata["request_extensions"] = hints
-        return await super().generate(
+        # Dynamo accepts nvext.agent_hints but rejects vLLM's top-level
+        # request_id extension. Call the OpenAI-compatible base directly so
+        # VLLMBackend._with_vllm_request_id() is not applied.
+        return await OpenAIBackend.generate(
+            self,
             shared=shared,
             job=job,
             messages=messages,
@@ -140,8 +144,9 @@ class DynamoBackend(VLLMBackend):
             "model": model,
             "messages": api_messages,
             "stream": True,
-            "max_tokens": DEFAULT_MAX_TOKENS,
         }
+        if metadata.get("max_tokens") is not None:
+            payload["max_tokens"] = metadata["max_tokens"]
         if hints:
             payload.update(hints)
         if tools:
@@ -169,6 +174,8 @@ class DynamoBackend(VLLMBackend):
         async for line in response.aiter_lines():
             if line.startswith("event:"):
                 event_name = line.removeprefix("event:").strip()
+                if event_name == "error":
+                    raise RuntimeError("Dynamo streaming error event")
                 continue
             if not line.startswith("data:"):
                 continue
@@ -177,6 +184,8 @@ class DynamoBackend(VLLMBackend):
                 continue
             event = json.loads(data)
             event_type = event.get("type") or event_name
+            if event_type == "error":
+                raise RuntimeError(f"Dynamo streaming error: {event}")
             if event_type == "tool_call_dispatch":
                 parsed = _parse_dynamo_tool_call(event.get("tool_call") or event)
                 tool_calls.append(parsed)

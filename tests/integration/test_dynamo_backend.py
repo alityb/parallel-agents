@@ -33,6 +33,63 @@ class _DynamoSSEHandler(BaseHTTPRequestHandler):
         return None
 
 
+class _DynamoJSONHandler(BaseHTTPRequestHandler):
+    bodies: list[dict] = []
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(length)) if length else {}
+        type(self).bodies.append(body)
+        payload = json.dumps({
+            "choices": [{
+                "message": {"role": "assistant", "content": "ok"},
+                "finish_reason": "stop",
+            }]
+        }).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, format, *args):
+        return None
+
+
+def test_dynamo_generate_attaches_nvext_without_vllm_request_id() -> None:
+    async def run() -> None:
+        _DynamoJSONHandler.bodies = []
+        server = HTTPServer(("127.0.0.1", 0), _DynamoJSONHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            backend = DynamoBackend(base_url=f"http://127.0.0.1:{server.server_port}")
+            job = AgentJob(job_id="job-1", index=0, input_data={}, prompt="do", estimated_prompt_tokens=1)
+
+            response = await backend.generate(
+                shared=SharedContext(prefix="system"),
+                job=job,
+                model="mock",
+                metadata={
+                    "job_id": "job-1",
+                    "nvext_agent_hints": True,
+                    "steps_to_execution": 0.5,
+                    "turn": 1,
+                    "max_turns": 3,
+                    "kv_key": "abc",
+                },
+            )
+
+            body = _DynamoJSONHandler.bodies[0]
+            assert response.content == "ok"
+            assert body["nvext"]["agent_hints"]["speculative_prefill"] is True
+            assert "request_id" not in body
+        finally:
+            server.shutdown()
+
+    asyncio.run(run())
+
+
 def test_dynamo_streaming_tool_call_dispatch_events_are_parsed() -> None:
     async def run() -> None:
         _DynamoSSEHandler.bodies = []
@@ -60,6 +117,7 @@ def test_dynamo_streaming_tool_call_dispatch_events_are_parsed() -> None:
             first = await queue.get()
 
             assert _DynamoSSEHandler.bodies[0]["nvext"]["agent_hints"]["speculative_prefill"] is True
+            assert "max_tokens" not in _DynamoSSEHandler.bodies[0]
             assert response.tool_calls[0].id == "call_dyn"
             assert response.tool_calls[0].name == "read_file"
             assert response.tool_calls[0].args == {"path": "README.md"}

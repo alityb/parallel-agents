@@ -1,0 +1,26 @@
+{
+  "ai_dynamo_version": "1.1.1",
+  "backend": "Dynamo + SGLang worker",
+  "base_url": "http://127.0.0.1:8001",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "overall_ok": true,
+  "sglang_version": "0.5.10.post1",
+  "streaming_nvext": {
+    "content": "stream-ok",
+    "ok": true,
+    "stop_reason": "stop",
+    "tool_calls": 0,
+    "wall": 0.14219038900046144
+  },
+  "unary_nvext": {
+    "content": "ok",
+    "ok": true,
+    "stop_reason": "stop",
+    "usage": {
+      "completion_tokens": 2,
+      "prompt_tokens": 21,
+      "total_tokens": 23
+    },
+    "wall": 0.14840948100027163
+  }
+}

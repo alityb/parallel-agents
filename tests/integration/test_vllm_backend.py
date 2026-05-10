@@ -7,7 +7,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from batch_agent.backends.vllm import VLLMBackend
-from batch_agent.spec import SharedContext
+from batch_agent.spec import AgentJob, SharedContext
 
 
 class _VLLMProbeHandler(BaseHTTPRequestHandler):
@@ -154,5 +154,40 @@ def test_warm_prefix_preserves_session_headers_when_disabled() -> None:
         assert hash_a != hash_b
         assert _VLLMProbeHandler.chat_bodies[0]["messages"][0]["content"] == prefix_a
         assert _VLLMProbeHandler.chat_bodies[1]["messages"][0]["content"] == prefix_b
+    finally:
+        server.shutdown()
+
+
+def test_generate_attaches_stable_batchagent_request_id() -> None:
+    _VLLMProbeHandler.gpu_cache_usage_values = [0.10]
+    _VLLMProbeHandler.chat_calls = 0
+    _VLLMProbeHandler.chat_bodies = []
+    server = HTTPServer(("127.0.0.1", 0), _VLLMProbeHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        backend = VLLMBackend(
+            api_key="EMPTY",
+            base_url=f"http://127.0.0.1:{server.server_port}",
+            block_sharing_probe_agents=0,
+        )
+        job = AgentJob(
+            job_id="job-7",
+            index=7,
+            input_data={},
+            prompt="hello",
+            estimated_prompt_tokens=1,
+        )
+
+        asyncio.run(
+            backend.generate(
+                shared=SharedContext(prefix="shared"),
+                job=job,
+                model="mock",
+                metadata={"job_id": "job-7", "turn": 2},
+            )
+        )
+
+        assert _VLLMProbeHandler.chat_bodies[0]["request_id"] == "batchagent:job-7:turn:2"
     finally:
         server.shutdown()

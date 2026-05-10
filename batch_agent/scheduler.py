@@ -556,7 +556,7 @@ class WaveScheduler:
             "timeout": self.plan.spec.timeout_per_agent,
         }
         if "metadata" in inspect.signature(self.backend.generate).parameters:
-            metadata = {"kv_key": state.kv_key, "job_id": state.job_id}
+            metadata = {"kv_key": state.kv_key, "job_id": state.job_id, "turn": state.turn}
             if self.plan.spec.nvext_agent_hints:
                 metadata["nvext_agent_hints"] = True
                 metadata["steps_to_execution"] = state.steps_to_execution
@@ -581,7 +581,7 @@ class WaveScheduler:
             "tool_queue": tool_queue,
         }
         if "metadata" in inspect.signature(self.backend.generate_streaming).parameters:
-            metadata = {"kv_key": state.kv_key, "job_id": state.job_id}
+            metadata = {"kv_key": state.kv_key, "job_id": state.job_id, "turn": state.turn}
             if self.plan.spec.nvext_agent_hints:
                 metadata["nvext_agent_hints"] = True
                 metadata["steps_to_execution"] = state.steps_to_execution

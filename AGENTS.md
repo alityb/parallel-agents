@@ -451,11 +451,11 @@ Tasks:
 SGLang's RadixAttention uses a token-level radix tree — more fine-grained than vLLM's block-level hashing. For multi-agent workloads with long shared prefixes that diverge mid-sequence, RadixAttention may outperform vLLM prefix caching without any patching.
 
 Tasks:
-- [ ] Complete the SGLang adapter (currently a structural stub)
-- [ ] Run Phase 2 benchmark suite against SGLang. Compare vs vLLM.
+- [x] Complete the SGLang adapter
+- [x] Run Phase 2 benchmark suite against SGLang. Compare vs vLLM.
 - [ ] Implement KVFlow prefetch hints against SGLang
 - [ ] Document: for which workloads does SGLang outperform vLLM?
-- [ ] `backend="sglang://localhost:30000"` as first-class public API option
+- [x] `backend="sglang://localhost:30000"` as first-class public API option
 
 ---
 
@@ -480,7 +480,7 @@ Tasks:
 - [x] Add `run_with_map_reduce()` for plan -> map -> reduce AutoResearch topology
 - [x] Add AutoResearch example skeleton
 - [ ] Run AutoResearch live with Anthropic + search credentials and commit output artifact
-- [ ] Verify Dynamo against a live server
+- [x] Verify Dynamo against a live server
 
 Success criteria:
 - SDK works with unmodified NVIDIA Dynamo via `nvext.agent_hints`
@@ -859,8 +859,8 @@ async def get_paper_metadata(paper_id: int) -> PaperMeta:
 | Prefix caching (vLLM, live) | Untested on GPU | ✅ tested + pinned | ✅ |
 | KVFlow prefetch | hints only; vLLM scheduler integration pending | ✅ scheduler-integrated | ✅ |
 | TokenDance diff KV | ❌ | ✅ (flag-gated) | ✅ |
-| SGLang backend | Parser fix mocked; live unresolved | ✅ | ✅ |
-| Dynamo backend / nvext hints | ✅ mock | ✅ live | ✅ |
+| SGLang backend | ✅ live A10G standalone | ✅ | ✅ |
+| Dynamo backend / nvext hints | ✅ live A10G unary + streaming | ✅ live | ✅ |
 | Three-tier map-reduce | ✅ mock | ✅ live demo | ✅ |
 | AutoResearch example | skeleton; live blocked by credentials | ✅ artifact | ✅ |
 | Model-based compaction | Heuristic only | ✅ | ✅ |

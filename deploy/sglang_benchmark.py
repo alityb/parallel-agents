@@ -3,11 +3,12 @@ SGLang live backend test + cache hit rate comparison vs vLLM.
 Assumes SGLang is running on localhost:30000.
 """
 from __future__ import annotations
-import asyncio, json, math, re, sys, time
+import asyncio, json, math, os, re, sys, time
 from pathlib import Path
 import httpx
 
-sys.path.insert(0, "/home/ubuntu/parallel-agents")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
 from batch_agent.backends.sglang import SGLangBackend
 from batch_agent.compiler import TaskCompiler
 from batch_agent.scheduler import WaveScheduler
@@ -18,7 +19,8 @@ VLLM   = "vllm://localhost:8000"   # may not be running; SGLang session is seque
 MODEL  = "Qwen/Qwen2.5-7B-Instruct"
 SYSTEM = "You are a concise assistant. " + "Analysis requires structured evaluation. " * 100
 SYSTEM = SYSTEM[:4096]
-OUT    = Path("/tmp/session_results"); OUT.mkdir(exist_ok=True)
+OUT    = REPO_ROOT / "tests/benchmarks/results/sglang_live"
+OUT.mkdir(parents=True, exist_ok=True)
 from pydantic import BaseModel
 
 class Out(BaseModel):
@@ -77,8 +79,8 @@ async def main():
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", "tests/integration/test_sglang_backend.py",
          "-v", "--tb=short", "--no-header"],
-        cwd="/home/ubuntu/parallel-agents",
-        env={**__import__("os").environ, "PYTHONPATH": "/home/ubuntu/parallel-agents"},
+        cwd=str(REPO_ROOT),
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
         capture_output=True, text=True
     )
     test_output = proc.stdout[-3000:]  # last 3000 chars

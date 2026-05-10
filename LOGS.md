@@ -2,6 +2,46 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 
 ## 2026-05-10
 
+### README rewrite around purpose, results, and research context — 2026-05-10
+
+- Rewrote `README.md` to be concise and product-focused: what BatchAgent is, why it exists, when to use it, backend status, verified results, architecture, limitations, and research references.
+- Removed over-broad launch/demo claims and kept results tied to committed JSON files.
+- Added an explicit note that the repeated `90` saved tool executions in the N=100 benchmark comes from the benchmark shape: 10 repeated tool keys across 100 agents. It verifies concurrent tool coalescing, not KVFlow prefetch or dynamic KV-cache neediness.
+- Kept KVFlow and TokenDance honest: KVFlow prefetch remains unverified pending scheduler-integrated vLLM block mappings; TokenDance diff KV remains prototype/mock only.
+
+### Live SGLang and Dynamo validation — 2026-05-10
+
+- Synced the current repo to the A10G host at `~/parallel-agents-bench`.
+- Stopped the prior vLLM server to free the GPU, then installed SGLang in `~/sglang-env` and launched `Qwen/Qwen2.5-7B-Instruct` on port `30000`.
+- SGLang standalone live result: `deploy/sglang_benchmark.py` completed N=10 and N=50 with `10/10` and `50/50` OK. Wall times were `2.368719s` and `2.985764s`; throughput was `4.2217/s` and `16.7461/s`; measured prefix-cache hit rates were `0.988034` and `0.988055`.
+- SGLang integration test on the live server passed `4 passed in 1.14s`. The live-health timeout was raised from `0.5s` to `2.0s` because the running server often takes about one second to answer `/health`.
+- Fixed `deploy/sglang_benchmark.py` so it no longer hardcodes `/home/ubuntu/parallel-agents`; it now resolves the repo root from the script path and writes to `tests/benchmarks/results/sglang_live/sglang_benchmark.json`.
+- Installed `ai-dynamo[sglang]` and launched a Dynamo SGLang worker plus Dynamo frontend on port `8001`, with `--enable-streaming-tool-dispatch`, `--strip-anthropic-preamble`, and the SGLang chat processor.
+- Dynamo live result: unary BatchAgent `DynamoBackend.generate()` with `nvext.agent_hints` returned `ok` in `0.148409s`, usage `21` prompt tokens and `2` completion tokens. Streaming `DynamoBackend.generate_streaming()` with `nvext.agent_hints` returned `stream-ok` in `0.142190s`.
+- Dynamo live testing exposed two adapter bugs and both were fixed:
+  - `DynamoBackend.generate()` inherited vLLM's top-level `request_id` extension, which Dynamo rejects with HTTP 400. It now calls the OpenAI-compatible base directly so `nvext.agent_hints` is sent without vLLM-only request IDs.
+  - `DynamoBackend.generate_streaming()` forced `max_tokens=4096`, which can exceed a 4096-token model context after prompt tokens and makes Dynamo emit an SSE error. It now only sends `max_tokens` when the caller supplies one, and raises clearly on Dynamo SSE error events.
+- Result files:
+  - `tests/benchmarks/results/sglang_live/sglang_benchmark.json`
+  - `tests/benchmarks/results/dynamo_live/dynamo_benchmark.json`
+- Focused local regression tests after the adapter changes: `pytest tests/integration/test_dynamo_backend.py tests/integration/test_sglang_backend.py -q` passed `5 passed, 1 skipped`.
+- Focused remote tests after live services: Dynamo mock integration passed `2 passed`; SGLang local/mock tests passed `3 passed, 1 skipped` after the standalone SGLang HTTP server was replaced by the Dynamo worker.
+
+### Raw SGLang/Dynamo vs BatchAgent benchmark — 2026-05-10
+
+- Added `tests/benchmarks/backend_raw_vs_batchagent.py`, a backend-neutral OpenAI-compatible benchmark for SGLang and Dynamo.
+- Workload: 100 two-turn agents, 2048-token shared system prompt, one simulated 800ms external tool wait per agent, 10 unique repeated tool queries, `max_inflight=32`, `Qwen/Qwen2.5-7B-Instruct` on the A10G.
+- Baseline is a regular endpoint client loop: `asyncio.gather` with a semaphore held across the whole agent loop, including the slow tool wait. BatchAgent uses the same real backend forwards but releases inference concurrency during tool wait and deduplicates tool calls through `ToolPool`.
+- Dynamo + SGLang worker result (`tests/benchmarks/results/backend_raw_vs_batchagent/dynamo_sglang.json`):
+  - Raw endpoint loop: 100/100 OK, wall `13.019355s`, throughput `7.6809/s`, tool calls `100/100`, backend requests `200`, total tokens `413,120`.
+  - BatchAgent: 100/100 OK, wall `8.414432s`, throughput `11.8843/s`, tool calls `10/100`, backend requests `201`, total tokens `435,150`.
+  - Delta: BatchAgent was `4.604924s` faster and saved `90` tool executions, with `22,030` extra model tokens from orchestration/schema/tool-loop overhead.
+- Standalone SGLang result (`tests/benchmarks/results/backend_raw_vs_batchagent/sglang_standalone.json`):
+  - Raw endpoint loop: 100/100 OK, wall `14.728366s`, throughput `6.7896/s`, tool calls `100/100`, backend requests `200`, prefix-cache hit rate after raw `0.985046`, total tokens `413,120`.
+  - BatchAgent: 100/100 OK, wall `8.401661s`, throughput `11.9024/s`, tool calls `10/100`, backend requests `201`, prefix-cache hit rate after BatchAgent `0.985727`, total tokens `435,150`.
+  - Delta: BatchAgent was `6.326704s` faster and saved `90` tool executions, with `22,030` extra model tokens.
+- Interpretation: raw SGLang/Dynamo remains the lower-overhead path for pure single-turn inference. On the multi-turn slow-tool workload, BatchAgent wins because it coalesces duplicate tools and avoids tying backend concurrency to external tool latency.
+
 ### OpenAI AutoResearch model defaults — 2026-05-10
 
 - Checked current official OpenAI model docs before changing defaults. The public API docs list `gpt-5.2` as the current frontier model; they do not list `gpt-5.5`.
@@ -54,6 +94,28 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 - `BRAVE_SEARCH_API_KEY`, `SERPAPI_KEY`, and `SERPAPI` were not visible to this process, so the retry used the requested fallback: a realistic 400ms mocked `web_search` while keeping the Anthropic backend live.
 - The run did not complete. Anthropic returned HTTP 400 for the live model calls. A minimal probe against both `claude-opus-4-6` and `claude-sonnet-4-6` returned: `Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.`
 - No wall-clock, cost, usage metadata, or `paper.md` artifact was produced. `examples/output/` was not created and no paper was committed.
+
+### Definitive slow-tool A10G benchmark — 2026-05-10
+
+- Fresh A10G checkout: `~/parallel-agents-bench`, commit `b31df29` plus local benchmark file `tests/benchmarks/definitive_benchmark.py`.
+- vLLM server: `vLLM 0.6.6.post1`, `Qwen/Qwen2.5-7B-Instruct`, single NVIDIA A10G 23GB, `--enable-prefix-caching`, `--max-model-len 4096`, `--gpu-memory-utilization 0.85`, `--disable-frontend-multiprocessing`.
+- Benchmark command:
+  `PYTHONPATH=. python tests/benchmarks/definitive_benchmark.py --backend vllm://localhost:8000 --n 100 --slow-tools --tool-latency 800 --system-prompt-tokens 2048`
+- Result file: `tests/benchmarks/results/definitive_benchmark/results.json`.
+- Workload: 100 two-turn agents, exact 2048-token shared system prompt target, one simulated 800ms external tool wait per agent, 200 total vLLM requests per config.
+- Naive `asyncio.gather`: 100/100 OK, wall `13.071658s`, throughput `7.650 agents/s`, tool calls requested/executed `100/100`, vLLM request P50/P95 `1.204654s` / `1.550401s`, total tokens `413,120`.
+- BatchAgent: 100/100 OK, wall `9.650992s`, throughput `10.362 agents/s`, tool calls requested/executed `100/10`, vLLM request P50/P95 `1.150465s` / `1.492705s`, total tokens `433,020`.
+- Delta: BatchAgent was `3.420667s` faster (`26.2%` wall-clock reduction), saved `90` external tool executions, and used `19,900` additional model tokens from orchestration/schema/tool-loop overhead.
+- vLLM prefix cache metric: before run `0.0`, after naive `0.986836`, after BatchAgent `0.989541`. This confirms the 2048-token shared prompt is being reused by vLLM on the A10G.
+- Interpretation: this is the real-mode benchmark that validates the current architecture's practical win on self-hosted inference: GPU prefix reuse stays high while BatchAgent reduces slow external tool work and keeps wall time lower. It does not prove KVFlow prefetch; scheduler-integrated CPU->GPU swap-in remains separate work.
+
+### KVFlow scheduler-integration boundary — 2026-05-10
+
+- Inspected live vLLM 0.6.6 scheduler source on the A10G. `Scheduler._schedule_swapped()` owns the swapped queue, calls `block_manager.can_swap_in(seq_group)`, then calls `Scheduler._swap_in(seq_group, blocks_to_swap_in)`. `_swap_in()` delegates to `BlockSpaceManager.swap_in(seq_group)`, which returns the CPU->GPU physical block mapping. That mapping is then surfaced in `SchedulerOutputs.blocks_to_swap_in` for worker execution.
+- `SelfAttnBlockSpaceManager.get_block_table(seq)` returns resident physical block IDs, not CPU->GPU swap mappings. This confirms the previous measurement-integrity conclusion: a `kv_key`/prefix-hash API route cannot safely synthesize `CacheEngine.swap_in()` input.
+- Additional architecture finding: BatchAgent's current vLLM adapter uses stateless OpenAI-compatible HTTP requests. During `TOOL_WAIT`, the prior generation request has completed; there is no paused/swapped vLLM `SequenceGroup` for that agent to prefetch. The currently measured A10G win therefore comes from prefix caching plus tool dedup/wave scheduling, not per-agent KVFlow swap-in.
+- Implemented stable vLLM `request_id` propagation: vLLM requests now receive `request_id="batchagent:{job_id}:turn:{turn}"` through request extensions when scheduler metadata includes job/turn. This gives future scheduler-integrated/stateful prefetch work a durable request handle instead of relying only on shared prefix hashes.
+- Regression test: `pytest tests/integration/test_vllm_backend.py -q` passed `5 passed`.
 
 ## 2026-05-09
 

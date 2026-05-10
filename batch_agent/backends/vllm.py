@@ -49,6 +49,33 @@ class VLLMBackend(OpenAIBackend):
     def from_url(cls, url: str) -> "VLLMBackend":
         return cls(api_key=NO_API_KEY, base_url=_http_url_from_scheme(url, "vllm"))
 
+    async def generate(self, **kwargs: Any) -> Any:
+        """Generate through vLLM with stable BatchAgent request IDs.
+
+        vLLM 0.6.x exposes `request_id` on OpenAI-compatible chat requests.
+        Setting it to the BatchAgent job/turn gives scheduler-side integrations
+        a durable handle for diagnostics and future stateful prefetch work.
+        """
+        kwargs["metadata"] = self._with_vllm_request_id(kwargs.get("metadata"))
+        return await super().generate(**kwargs)
+
+    async def generate_streaming(self, **kwargs: Any) -> Any:
+        kwargs["metadata"] = self._with_vllm_request_id(kwargs.get("metadata"))
+        return await super().generate_streaming(**kwargs)
+
+    def _with_vllm_request_id(self, metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not metadata:
+            return metadata
+        patched = dict(metadata)
+        extensions = dict(patched.get("request_extensions") or {})
+        if "request_id" not in extensions and patched.get("job_id"):
+            turn = patched.get("turn")
+            suffix = f":turn:{turn}" if turn is not None else ""
+            extensions["request_id"] = f"batchagent:{patched['job_id']}{suffix}"
+        if extensions:
+            patched["request_extensions"] = extensions
+        return patched
+
     async def warm_prefix(self, shared: SharedContext, model: str) -> str | None:
         if not shared.prefix:
             return None

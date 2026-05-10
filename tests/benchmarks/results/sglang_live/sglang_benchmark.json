@@ -1,0 +1,27 @@
+{
+  "benchmarks": {
+    "N10": {
+      "cache_metrics": {
+        "gpu_utilization": 0.0,
+        "prefix_cache_hit_rate": 0.9880341880341881
+      },
+      "n": 10,
+      "ok": 10,
+      "tput": 4.2216906005795485,
+      "wall": 2.3687192990000767
+    },
+    "N50": {
+      "cache_metrics": {
+        "gpu_utilization": 0.0,
+        "prefix_cache_hit_rate": 0.9880546075085325
+      },
+      "n": 50,
+      "ok": 50,
+      "tput": 16.746132721045594,
+      "wall": 2.9857639869987906
+    }
+  },
+  "integration_test_output": "============================= test session starts ==============================\ncollecting ... collected 4 items\n\ntests/integration/test_sglang_backend.py::test_sglang_url_parsing PASSED [ 25%]\ntests/integration/test_sglang_backend.py::test_sglang_native_generate_uses_backend_response PASSED [ 50%]\ntests/integration/test_sglang_backend.py::test_sglang_openai_compat_accepts_dict_tool_arguments PASSED [ 75%]\ntests/integration/test_sglang_backend.py::test_sglang_live_health_if_running PASSED [100%]\n\n============================== 4 passed in 1.14s ===============================\n",
+  "integration_tests_passed": true,
+  "model": "Qwen/Qwen2.5-7B-Instruct"
+}

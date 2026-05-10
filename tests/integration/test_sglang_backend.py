@@ -113,7 +113,7 @@ def test_sglang_openai_compat_accepts_dict_tool_arguments(monkeypatch) -> None:
 
 def test_sglang_live_health_if_running() -> None:
     try:
-        response = httpx.get("http://localhost:30000/health", timeout=0.5)
+        response = httpx.get("http://localhost:30000/health", timeout=2.0)
     except Exception:
         pytest.skip("SGLang server is not running")
     assert response.status_code == 200

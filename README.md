@@ -158,16 +158,19 @@ A10G.
 
 Source: `tests/benchmarks/results/backend_raw_vs_batchagent/`
 
-| Backend | Mode | Wall | Agents/s | Tool calls | Cache hit |
+| Backend | Mode | Wall | Agents/s | TTFT P50/P95 | Tool calls |
 |---|---|---:|---:|---:|---:|
-| SGLang standalone | raw endpoint loop | 14.73s | 6.79 | 100/100 | 98.50% |
-| SGLang standalone | BatchAgent | 8.40s | 11.90 | 10/100 | 98.57% |
-| Dynamo + SGLang worker | raw endpoint loop | 13.02s | 7.68 | 100/100 | n/a |
-| Dynamo + SGLang worker | BatchAgent | 8.41s | 11.88 | 10/100 | n/a |
+| SGLang standalone | raw endpoint loop | 11.21s | 8.92 | 0.519s / 0.807s | 100/100 |
+| SGLang standalone | BatchAgent | 7.65s | 13.07 | 0.451s / 0.808s | 10/100 |
+| Dynamo + SGLang worker | raw endpoint loop | 11.15s | 8.97 | 0.506s / 0.794s | 100/100 |
+| Dynamo + SGLang worker | BatchAgent | 7.68s | 13.02 | 0.467s / 0.798s | 10/100 |
 
 Interpretation: raw SGLang/Dynamo is the right baseline for one-shot inference.
 BatchAgent wins on this multi-turn workload because duplicate tool calls are
 coalesced and inference concurrency is not held while tools are waiting.
+TTFT is measured from streaming SSE chunks. Cache-hit numbers are omitted from
+this table because SGLang's `/metrics` value was inconsistent after the second
+phase; the separate live probe below records the stable SGLang cache result.
 
 ### vLLM Slow-Tool Benchmark
 

@@ -62,6 +62,7 @@ class LiveOpenAICompatDeterministicBackend(BackendAdapter):
         self.max_tokens = max_tokens
         self.request_count = 0
         self.request_latencies: list[float] = []
+        self.ttft_latencies: list[float] = []
         self.usage_records: list[dict[str, Any]] = []
 
     async def warm_prefix(self, shared: SharedContext, model: str) -> str | None:
@@ -156,19 +157,50 @@ class LiveOpenAICompatDeterministicBackend(BackendAdapter):
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": 0,
+            "stream": True,
         }
         if metadata:
             extensions = metadata.get("request_extensions")
             if isinstance(extensions, dict):
                 payload.update(extensions)
         started = time.monotonic()
+        ttft: float | None = None
+        raw: dict[str, Any] = {}
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(f"{self.base_url}/v1/chat/completions", json=payload)
-            response.raise_for_status()
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/v1/chat/completions",
+                json=payload,
+            ) as response:
+                response.raise_for_status()
+                if "text/event-stream" not in response.headers.get("content-type", ""):
+                    raw = response.json()
+                else:
+                    content_parts: list[str] = []
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        data = line.removeprefix("data:").strip()
+                        if not data or data == "[DONE]":
+                            continue
+                        event = json.loads(data)
+                        choice = (event.get("choices") or [{}])[0]
+                        delta = choice.get("delta") or {}
+                        if ttft is None and delta.get("content"):
+                            ttft = time.monotonic() - started
+                        if delta.get("content"):
+                            content_parts.append(delta["content"])
+                        if isinstance(event.get("usage"), dict):
+                            raw["usage"] = event["usage"]
+                    raw.setdefault(
+                        "choices",
+                        [{"message": {"role": "assistant", "content": "".join(content_parts)}}],
+                    )
         elapsed = time.monotonic() - started
         self.request_count += 1
         self.request_latencies.append(elapsed)
-        raw = response.json()
+        if ttft is not None:
+            self.ttft_latencies.append(ttft)
         if isinstance(raw.get("usage"), dict):
             self.usage_records.append(raw["usage"])
         return raw
@@ -311,6 +343,10 @@ def _result_summary(
         "backend_requests": backend.request_count,
         "backend_request_latency_p50": percentile(backend.request_latencies, 0.50),
         "backend_request_latency_p95": percentile(backend.request_latencies, 0.95),
+        "ttft_p50": percentile(backend.ttft_latencies, 0.50),
+        "ttft_p95": percentile(backend.ttft_latencies, 0.95),
+        "ttft_p99": percentile(backend.ttft_latencies, 0.99),
+        "ttft_samples": len(backend.ttft_latencies),
         "usage": usage_totals(backend.usage_records),
     }
 

@@ -42,6 +42,17 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
   - Delta: BatchAgent was `6.326704s` faster and saved `90` tool executions, with `22,030` extra model tokens.
 - Interpretation: raw SGLang/Dynamo remains the lower-overhead path for pure single-turn inference. On the multi-turn slow-tool workload, BatchAgent wins because it coalesces duplicate tools and avoids tying backend concurrency to external tool latency.
 
+### TTFT instrumentation for raw SGLang/Dynamo vs BatchAgent — 2026-05-10
+
+- Updated `tests/benchmarks/backend_raw_vs_batchagent.py` to use streaming chat completions and record TTFT from the first SSE content chunk. The result JSON now records `ttft_p50`, `ttft_p95`, `ttft_p99`, and `ttft_samples` for both raw and BatchAgent modes.
+- Re-ran standalone SGLang on the A10G after the streaming instrumentation:
+  - Raw endpoint loop: wall `11.206876s`, throughput `8.9231/s`, TTFT P50/P95/P99 `0.519493s` / `0.807180s` / `0.839256s`, tool calls `100/100`.
+  - BatchAgent: wall `7.649914s`, throughput `13.0720/s`, TTFT P50/P95/P99 `0.450761s` / `0.807557s` / `0.835460s`, tool calls `10/100`.
+- Re-ran Dynamo + SGLang worker on the A10G after warming the worker once. A cold first run produced a raw P95 TTFT tail around 15s, so it was discarded and immediately rerun against the warmed worker:
+  - Raw endpoint loop: wall `11.152707s`, throughput `8.9664/s`, TTFT P50/P95/P99 `0.505840s` / `0.793890s` / `0.828181s`, tool calls `100/100`.
+  - BatchAgent: wall `7.677793s`, throughput `13.0246/s`, TTFT P50/P95/P99 `0.466783s` / `0.797516s` / `0.837679s`, tool calls `10/100`.
+- README now reports TTFT for this benchmark. Cache-hit numbers are intentionally omitted from that table because SGLang `/metrics` returned an inconsistent post-phase value after the streaming rerun; the separate SGLang live probe remains the stable cache-hit source.
+
 ### OpenAI AutoResearch model defaults — 2026-05-10
 
 - Checked current official OpenAI model docs before changing defaults. The public API docs list `gpt-5.2` as the current frontier model; they do not list `gpt-5.5`.

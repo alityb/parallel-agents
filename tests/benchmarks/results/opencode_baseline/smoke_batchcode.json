@@ -1,0 +1,46 @@
+{
+  "backend": "sglang://localhost:30000",
+  "batchcode_parallel": {
+    "results": [
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "0-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 24**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime when trying to access an undefined variable `discunt`.  \n   - **Severity:** P0 (Critical)\n\n2. **Line 33**: `name.strip().title()` could raise an `AttributeError` if `customer['name']` is `None`. The `.strip()` and `.title()` methods cannot be called on `None`. \n   - **Severity:** P1 (High)\n\nThese are the only real runtime or logic bugs identified based on the criteria provided.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_00.py",
+        "success": false,
+        "task_id": "review-00",
+        "tool_calls": 0,
+        "wall_clock_seconds": 4.018271290929988
+      }
+    ],
+    "summary": {
+      "bug_recall": 0.5,
+      "expected_bugs": 2,
+      "failed": 0,
+      "found_bugs": 1,
+      "name": "batchcode_parallel",
+      "ok": 1,
+      "per_task_wall_clock_seconds": [
+        4.018271290929988
+      ],
+      "quality_avg": 3.0,
+      "success_rate": 0.0,
+      "tasks": 1,
+      "tool_calls": 0,
+      "wall_clock_seconds": 4.019885415909812
+    }
+  },
+  "benchmark": "opencode_baseline_code_review",
+  "fixture_dir": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review",
+  "max_inflight": 1,
+  "model": "Qwen/Qwen2.5-32B-Instruct",
+  "n": 1,
+  "seed": 1337,
+  "started_at": 1778453138.717128
+}

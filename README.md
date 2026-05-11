@@ -164,6 +164,8 @@ Source: `tests/benchmarks/results/backend_raw_vs_batchagent/`
 | SGLang standalone | BatchAgent | 7.65s | 13.07 | 0.451s / 0.808s | 10/100 |
 | Dynamo + SGLang worker | raw endpoint loop | 11.15s | 8.97 | 0.506s / 0.794s | 100/100 |
 | Dynamo + SGLang worker | BatchAgent | 7.68s | 13.02 | 0.467s / 0.798s | 10/100 |
+| H100 SGLang, Qwen2.5-32B | raw endpoint loop | 9.06s | 11.04 | 0.552s / 1.099s | 100/100 |
+| H100 SGLang, Qwen2.5-32B | BatchAgent | 7.01s | 14.27 | 0.515s / 1.066s | 10/100 |
 
 Interpretation: raw SGLang/Dynamo is the right baseline for one-shot inference.
 BatchAgent wins on this multi-turn workload because duplicate tool calls are
@@ -171,6 +173,9 @@ coalesced and inference concurrency is not held while tools are waiting.
 TTFT is measured from streaming SSE chunks. Cache-hit numbers are omitted from
 this table because SGLang's `/metrics` value was inconsistent after the second
 phase; the separate live probe below records the stable SGLang cache result.
+On the H100 32B run, BatchAgent was 2.05s faster than the raw loop, a 22.6%
+wall-clock reduction, with 90% tool-call deduplication and a 99.95% SGLang
+prefix cache hit rate after the BatchAgent phase.
 
 ### vLLM Slow-Tool Benchmark
 

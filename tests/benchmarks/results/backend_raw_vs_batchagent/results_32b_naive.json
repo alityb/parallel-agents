@@ -1,0 +1,42 @@
+{
+  "base_url": "http://localhost:30000",
+  "benchmark": "backend_raw_vs_batchagent",
+  "config": "D_naive_raw_endpoint_loop",
+  "label": "qwen25_32b_h100_sglang_400ms_rerun",
+  "max_inflight": 32,
+  "metrics_after": {
+    "gpu_utilization": 0.13,
+    "prefix_cache_hit_rate": 0.9995176073323685
+  },
+  "metrics_before": {
+    "gpu_utilization": 0.15,
+    "prefix_cache_hit_rate": 0.9995395948434622
+  },
+  "model": "Qwen/Qwen2.5-32B-Instruct",
+  "n": 100,
+  "result": {
+    "backend_request_latency_p50": 0.9341528329532593,
+    "backend_request_latency_p95": 1.3402851668652147,
+    "backend_requests": 200,
+    "failed": 0,
+    "failure_samples": [],
+    "mode": "raw_endpoint_loop",
+    "ok": 100,
+    "throughput_agents_per_sec": 11.04035632914392,
+    "tool_calls_executed": 100,
+    "tool_calls_requested": 100,
+    "ttft_p50": 0.5520701669156551,
+    "ttft_p95": 1.098701833980158,
+    "ttft_p99": 1.1161815840750933,
+    "ttft_samples": 200,
+    "usage": {
+      "completion_tokens": 0,
+      "prompt_tokens": 0,
+      "total_tokens": 0
+    },
+    "wall_clock_seconds": 9.057678667129949
+  },
+  "system_prompt_tokens_target": 2048,
+  "timestamp": 1778452626.3276339,
+  "tool_latency_ms": 400.0
+}

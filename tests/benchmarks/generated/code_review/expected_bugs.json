@@ -1,0 +1,872 @@
+[
+  {
+    "task_id": "review-00",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_00.py",
+    "bugs": [
+      {
+        "bug_id": "0-wrong-variable",
+        "line": 23,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      },
+      {
+        "bug_id": "0-missing-null-check",
+        "line": 26,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      }
+    ]
+  },
+  {
+    "task_id": "review-01",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_01.py",
+    "bugs": [
+      {
+        "bug_id": "1-wrong-variable",
+        "line": 23,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      },
+      {
+        "bug_id": "1-off-by-one",
+        "line": 29,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      },
+      {
+        "bug_id": "1-missing-null-check",
+        "line": 35,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      }
+    ]
+  },
+  {
+    "task_id": "review-02",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_02.py",
+    "bugs": [
+      {
+        "bug_id": "2-missing-null-check",
+        "line": 19,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      },
+      {
+        "bug_id": "2-wrong-variable",
+        "line": 28,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      }
+    ]
+  },
+  {
+    "task_id": "review-03",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_03.py",
+    "bugs": [
+      {
+        "bug_id": "3-missing-null-check",
+        "line": 19,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      },
+      {
+        "bug_id": "3-wrong-variable",
+        "line": 28,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      },
+      {
+        "bug_id": "3-off-by-one",
+        "line": 34,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      }
+    ]
+  },
+  {
+    "task_id": "review-04",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_04.py",
+    "bugs": [
+      {
+        "bug_id": "4-wrong-variable",
+        "line": 23,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      },
+      {
+        "bug_id": "4-missing-null-check",
+        "line": 26,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      }
+    ]
+  },
+  {
+    "task_id": "review-05",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_05.py",
+    "bugs": [
+      {
+        "bug_id": "5-off-by-one",
+        "line": 22,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      },
+      {
+        "bug_id": "5-missing-null-check",
+        "line": 28,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      },
+      {
+        "bug_id": "5-wrong-variable",
+        "line": 37,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      }
+    ]
+  },
+  {
+    "task_id": "review-06",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_06.py",
+    "bugs": [
+      {
+        "bug_id": "6-off-by-one",
+        "line": 22,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      },
+      {
+        "bug_id": "6-missing-null-check",
+        "line": 28,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      }
+    ]
+  },
+  {
+    "task_id": "review-07",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_07.py",
+    "bugs": [
+      {
+        "bug_id": "7-missing-null-check",
+        "line": 19,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      },
+      {
+        "bug_id": "7-wrong-variable",
+        "line": 28,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      },
+      {
+        "bug_id": "7-off-by-one",
+        "line": 34,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      }
+    ]
+  },
+  {
+    "task_id": "review-08",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_08.py",
+    "bugs": [
+      {
+        "bug_id": "8-wrong-variable",
+        "line": 23,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      },
+      {
+        "bug_id": "8-off-by-one",
+        "line": 29,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      }
+    ]
+  },
+  {
+    "task_id": "review-09",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_09.py",
+    "bugs": [
+      {
+        "bug_id": "9-missing-null-check",
+        "line": 19,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      },
+      {
+        "bug_id": "9-off-by-one",
+        "line": 27,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      },
+      {
+        "bug_id": "9-wrong-variable",
+        "line": 37,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      }
+    ]
+  },
+  {
+    "task_id": "review-10",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_10.py",
+    "bugs": [
+      {
+        "bug_id": "10-off-by-one",
+        "line": 22,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      },
+      {
+        "bug_id": "10-wrong-variable",
+        "line": 32,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      }
+    ]
+  },
+  {
+    "task_id": "review-11",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_11.py",
+    "bugs": [
+      {
+        "bug_id": "11-missing-null-check",
+        "line": 19,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      },
+      {
+        "bug_id": "11-wrong-variable",
+        "line": 28,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      },
+      {
+        "bug_id": "11-off-by-one",
+        "line": 34,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      }
+    ]
+  },
+  {
+    "task_id": "review-12",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_12.py",
+    "bugs": [
+      {
+        "bug_id": "12-off-by-one",
+        "line": 22,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      },
+      {
+        "bug_id": "12-wrong-variable",
+        "line": 32,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      }
+    ]
+  },
+  {
+    "task_id": "review-13",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_13.py",
+    "bugs": [
+      {
+        "bug_id": "13-wrong-variable",
+        "line": 23,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      },
+      {
+        "bug_id": "13-off-by-one",
+        "line": 29,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      },
+      {
+        "bug_id": "13-missing-null-check",
+        "line": 35,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      }
+    ]
+  },
+  {
+    "task_id": "review-14",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_14.py",
+    "bugs": [
+      {
+        "bug_id": "14-missing-null-check",
+        "line": 19,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      },
+      {
+        "bug_id": "14-off-by-one",
+        "line": 27,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      }
+    ]
+  },
+  {
+    "task_id": "review-15",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_15.py",
+    "bugs": [
+      {
+        "bug_id": "15-wrong-variable",
+        "line": 23,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      },
+      {
+        "bug_id": "15-off-by-one",
+        "line": 29,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      },
+      {
+        "bug_id": "15-missing-null-check",
+        "line": 35,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      }
+    ]
+  },
+  {
+    "task_id": "review-16",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_16.py",
+    "bugs": [
+      {
+        "bug_id": "16-off-by-one",
+        "line": 22,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      },
+      {
+        "bug_id": "16-wrong-variable",
+        "line": 32,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      }
+    ]
+  },
+  {
+    "task_id": "review-17",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_17.py",
+    "bugs": [
+      {
+        "bug_id": "17-missing-null-check",
+        "line": 19,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      },
+      {
+        "bug_id": "17-off-by-one",
+        "line": 27,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      },
+      {
+        "bug_id": "17-wrong-variable",
+        "line": 37,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      }
+    ]
+  },
+  {
+    "task_id": "review-18",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_18.py",
+    "bugs": [
+      {
+        "bug_id": "18-wrong-variable",
+        "line": 23,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      },
+      {
+        "bug_id": "18-missing-null-check",
+        "line": 26,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      }
+    ]
+  },
+  {
+    "task_id": "review-19",
+    "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_19.py",
+    "bugs": [
+      {
+        "bug_id": "19-off-by-one",
+        "line": 22,
+        "kind": "off_by_one",
+        "severity": "P1",
+        "keywords": [
+          "off",
+          "range",
+          "missing",
+          "last",
+          "window",
+          "boundary"
+        ],
+        "description": "Loop stops before the final valid window."
+      },
+      {
+        "bug_id": "19-missing-null-check",
+        "line": 28,
+        "kind": "missing_null_check",
+        "severity": "P1",
+        "keywords": [
+          "none",
+          "null",
+          "check",
+          "attribute",
+          "customer",
+          "get"
+        ],
+        "description": "customer may be None before customer.get is called."
+      },
+      {
+        "bug_id": "19-wrong-variable",
+        "line": 37,
+        "kind": "wrong_variable",
+        "severity": "P0",
+        "keywords": [
+          "discunt",
+          "discount",
+          "undefined",
+          "name",
+          "variable",
+          "typo"
+        ],
+        "description": "Return references undefined variable discunt instead of discount."
+      }
+    ]
+  }
+]

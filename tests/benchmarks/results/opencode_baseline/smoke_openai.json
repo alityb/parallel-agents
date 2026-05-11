@@ -1,0 +1,48 @@
+{
+  "backend": "sglang://localhost:30000",
+  "benchmark": "opencode_baseline_code_review",
+  "fixture_dir": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review",
+  "max_inflight": 10,
+  "model": "Qwen/Qwen2.5-32B-Instruct",
+  "n": 1,
+  "openai_base_url": "https://api.openai.com/v1",
+  "openai_model": "gpt-4.1-mini",
+  "openai_sequential": {
+    "results": [
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "0-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. Line 15: `return subtotal - discunt`  \n   Description: Typo in variable name `discunt` instead of `discount`. Causes NameError at runtime.  \n   Severity: P0\n\n2. Line 22: `name = customer.get('name')`  \n   Description: `customer` can be None, calling `.get()` on None will raise AttributeError. Missing None check.  \n   Severity: P0\n\n3. Line 23: `name.strip().title()`  \n   Description: `name` can be None if 'name' key is missing, calling `.strip()` on None raises AttributeError. Missing check for None.  \n   Severity: P0",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_00.py",
+        "success": false,
+        "task_id": "review-00",
+        "tool_calls": 0,
+        "wall_clock_seconds": 3.2870644577778876
+      }
+    ],
+    "summary": {
+      "bug_recall": 0.5,
+      "expected_bugs": 2,
+      "failed": 0,
+      "found_bugs": 1,
+      "name": "openai_sequential",
+      "ok": 1,
+      "per_task_wall_clock_seconds": [
+        3.2870644577778876
+      ],
+      "quality_avg": 3.0,
+      "success_rate": 0.0,
+      "tasks": 1,
+      "tool_calls": 0,
+      "wall_clock_seconds": 3.2880834159441292
+    }
+  },
+  "seed": 1337,
+  "started_at": 1778454122.35842
+}

@@ -1,0 +1,48 @@
+{
+  "backend": "sglang://localhost:30000",
+  "benchmark": "opencode_baseline_code_review",
+  "fixture_dir": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review",
+  "max_inflight": 10,
+  "model": "Qwen/Qwen2.5-32B-Instruct",
+  "n": 1,
+  "openai_base_url": "https://api.openai.com/v1",
+  "openai_model": "",
+  "seed": 1337,
+  "sglang_sequential": {
+    "results": [
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "0-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. **Line 22**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 33**: `name.strip().title()` could raise an `AttributeError` if `name` is `None`.  \n   - **Description**: The `get` method returns `None` if the key is not found, and calling `.strip()` on `None` will raise an error.\n   - **Severity**: P1\n\n3. **Line 44**: `order.get('amount', 0)` assumes that 'amount' is always an integer, but it might not be.  \n   - **Description**: If 'amount' is not an integer, this could lead to unexpected behavior or errors.\n   - **Severity**: P2",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_00.py",
+        "success": false,
+        "task_id": "review-00",
+        "tool_calls": 1,
+        "wall_clock_seconds": 5.028309833956882
+      }
+    ],
+    "summary": {
+      "bug_recall": 0.5,
+      "expected_bugs": 2,
+      "failed": 0,
+      "found_bugs": 1,
+      "name": "sglang_sequential",
+      "ok": 1,
+      "per_task_wall_clock_seconds": [
+        5.028309833956882
+      ],
+      "quality_avg": 3.0,
+      "success_rate": 0.0,
+      "tasks": 1,
+      "tool_calls": 1,
+      "wall_clock_seconds": 5.029127166140825
+    }
+  },
+  "started_at": 1778454503.828141
+}

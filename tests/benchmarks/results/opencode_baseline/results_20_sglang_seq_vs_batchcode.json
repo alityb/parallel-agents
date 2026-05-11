@@ -1,0 +1,714 @@
+{
+  "backend": "sglang://localhost:30000",
+  "batchcode_parallel": {
+    "results": [
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "0-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 24**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime when trying to access an undefined variable `discunt`.  \n   - **Severity:** P0 (Critical)\n\n2. **Line 33**: `name.strip().title()` could raise an `AttributeError` if `customer['name']` is `None`. The `.strip()` and `.title()` methods cannot be called on `None`. \n   - **Severity:** P1 (High)\n\nThese are the only real runtime or logic bugs identified in the code.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_00.py",
+        "success": false,
+        "task_id": "review-00",
+        "tool_calls": 0,
+        "wall_clock_seconds": 4.327736292034388
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "1-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 2,
+        "output_text": "1. **Line 24**: `return subtotal - discunt` should be `return subtotal - discount`. This is a runtime bug because it will raise a `NameError` since `discunt` is not defined. **Severity: P0**\n\n2. **Line 33**: The `customer_label` function does not handle the case where `customer` is `None`. It should return an empty string or a default label in this case to avoid `AttributeError` when calling `.get()` on `None`. **Severity: P1**\n\n3. **Line 38**: The `summarize_orders` function assumes that every dictionary in the list has an 'amount' key, but it uses `.get('amount', 0)` which is safe. However, if the structure of the dictionaries changes, this could lead to logic errors. This is more of a potential future issue rather than a current runtime or logic bug. **Severity: P2**",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_01.py",
+        "success": false,
+        "task_id": "review-01",
+        "tool_calls": 0,
+        "wall_clock_seconds": 5.806670959107578
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 2,
+        "found_bug_ids": [
+          "2-missing-null-check",
+          "2-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 5,
+        "output_text": "1. **Line 25**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime. **Severity: P0**\n\n2. **Line 16**: The `normalize_slug` function does not handle the case where `value` might be an empty string or only contains spaces, which would result in an empty string being returned. While this may be intended behavior, it's worth noting as it could lead to unexpected results depending on usage context. **Severity: P2**\n\n3. **Line 19**: The `customer_label` function assumes that the 'name' key exists in the `customer` dictionary and attempts to call `.strip()` and `.title()` on it. If 'name' is not present, this will raise an `AttributeError`. It's recommended to add a check for the presence of 'name'. **Severity: P1**\n\n4. **Line 28**: The `summarize_orders` function does not account for the possibility that the 'amount' key might not exist in some dictionaries within the `orders` list. Although the code uses `.get('amount', 0)`, it doesn't handle the case where 'amount' might be non-integer (e.g., float). However, since the function signature specifies `dict[str, int]`, this is less likely to be an issue. **Severity: P2**",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_02.py",
+        "success": true,
+        "task_id": "review-02",
+        "tool_calls": 0,
+        "wall_clock_seconds": 8.44882829207927
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 2,
+        "found_bug_ids": [
+          "3-wrong-variable",
+          "3-off-by-one"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. **Line 29**: `return subtotal - discunt` should be `return subtotal - discount`. This is a runtime bug due to a typo. **Severity: P0**\n   \n2. **Line 34**: The loop condition in the `moving_average` function should be `range(0, len(values) - window + 1)` to include the last possible window. This is a logic bug that results in missing the last average calculation. **Severity: P1**\n\nNo other bugs were found that would cause runtime errors or significant logic issues.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_03.py",
+        "success": false,
+        "task_id": "review-03",
+        "tool_calls": 0,
+        "wall_clock_seconds": 3.506283540977165
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "4-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. **Line 22**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime when the variable `discunt` is referenced. **Severity: P0**\n\n2. **Line 33**: `name.strip().title()` could raise an `AttributeError` if `customer['name']` is `None`. The `strip()` and `title()` methods cannot be called on `None`. **Severity: P1**\n\nThese are the only bugs that affect runtime or logic in the provided code.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_04.py",
+        "success": false,
+        "task_id": "review-04",
+        "tool_calls": 0,
+        "wall_clock_seconds": 3.6751946250442415
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 2,
+        "found_bug_ids": [
+          "5-missing-null-check",
+          "5-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 45**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime when `discunt` is referenced but not defined. **Severity: P0**\n   \n2. **Line 36**: The `moving_average` function does not handle the case where `len(values)` is less than or equal to `window`, which would result in an empty list being returned without any averaging calculation. While this isn't a runtime error, it could lead to unexpected behavior if the caller expects some form of average even for small datasets. **Severity: P1**\n\n3. **Line 27**: In the `customer_label` function, if `customer` is `None`, `name` will also be `None`, and calling `.strip()` on `None` will raise a `TypeError`. This should be handled to avoid runtime errors. **Severity: P0**\n\nThese are the identified bugs based on the criteria provided.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_05.py",
+        "success": false,
+        "task_id": "review-05",
+        "tool_calls": 0,
+        "wall_clock_seconds": 6.397705750074238
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 22**: `customer_label` function can raise an AttributeError if `name` is None. This happens when the 'name' key does not exist in the customer dictionary or its value is None. Severity: P1.\n   - **Description**: The `strip()` and `title()` methods cannot be called on a NoneType object, which will cause a runtime error.\n\n2. **Line 30**: `summarize_orders` function always increments the count regardless of whether the order contains a valid 'amount'. Severity: P2.\n   - **Description**: If an order dictionary does not contain the 'amount' key, it still counts as an order, which might not be the intended behavior.\n\nNo other significant runtime or logic bugs were identified in the provided code.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_06.py",
+        "success": false,
+        "task_id": "review-06",
+        "tool_calls": 0,
+        "wall_clock_seconds": 5.139264208031818
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 36**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name.\n   - **Severity**: P0 (Runtime Error)\n\n2. **Line 44**: The loop range should be `range(0, len(values) - window + 1)` to include the last possible window.  \n   - **Description**: The current range excludes the last possible window of values.\n   - **Severity**: P1 (Logic Bug)\n\nNo other runtime or logic bugs were identified in the provided code.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_07.py",
+        "success": false,
+        "task_id": "review-07",
+        "tool_calls": 0,
+        "wall_clock_seconds": 3.99621191713959
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "8-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 24**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime when trying to access an undefined variable `discunt`.  \n   - **Severity:** P0 (Critical)\n\n2. **Line 33**: The loop condition should be `for start in range(0, len(values) - window + 1):` to include the last possible window. As it stands, the function will miss the last window if `window > 1`.  \n   - **Severity:** P1 (Major)\n\nNo other critical or major bugs were identified in the code. The remaining code appears to be logically sound and free of runtime errors based on the provided context.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_08.py",
+        "success": false,
+        "task_id": "review-08",
+        "tool_calls": 0,
+        "wall_clock_seconds": 4.976435624994338
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "9-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 2,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 45**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name.\n   - **Severity**: P0 (Runtime Error)\n\n2. **Line 36**: The loop in `moving_average` function does not include the last possible window. It should iterate up to `len(values) - window + 1`.\n   - **Description**: The moving average calculation misses the last window due to incorrect range.\n   - **Severity**: P1 (Logic Error)\n\nNo other runtime or logic errors were identified in the provided code.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_09.py",
+        "success": false,
+        "task_id": "review-09",
+        "tool_calls": 0,
+        "wall_clock_seconds": 4.1555985829327255
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 42**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime when trying to access an undefined variable `discunt`. **Severity: P0**\n\n2. **Line 35**: The `normalize_slug` function does not handle empty strings or strings with only spaces, which could lead to unexpected behavior (e.g., returning an empty string). However, this is more of a potential logic issue rather than a strict bug. **Severity: P2**\n\n3. **Line 47**: In the `summarize_orders` function, the `order.get('amount', 0)` method is used, but there's no check for other keys in the dictionary. If the dictionary contains other keys, it might be misleading. However, since the function works as intended based on the given context, this is more of a documentation or clarity issue. **Severity: P2**\n\nThese are the identified issues focusing strictly on runtime and logic errors.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_10.py",
+        "success": false,
+        "task_id": "review-10",
+        "tool_calls": 0,
+        "wall_clock_seconds": 6.304891959065571
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "11-off-by-one"
+        ],
+        "ok": true,
+        "output_quality": 2,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 34**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime when trying to access an undefined variable `discunt`.  \n   - **Severity:** P0 (Critical)\n\n2. **Line 26**: The `normalize_slug` function does not handle cases where `value` might be empty or only contains spaces, which would result in an empty string being returned. While this may be intended behavior, it's worth noting as it could lead to unexpected results depending on usage.\n   - **Severity:** P2 (Low)\n\n3. **Line 45**: In the `moving_average` function, the loop condition `for start in range(0, len(values) - window)` should be `for start in range(0, len(values) - window + 1)` to include the last possible window in the list. This is a logic bug that can lead to missing the last average calculation if the window size allows for it.\n   - **Severity:** P1 (Moderate)\n\nThese are the identified bugs based on the criteria provided.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_11.py",
+        "success": false,
+        "task_id": "review-11",
+        "tool_calls": 0,
+        "wall_clock_seconds": 6.844312000088394
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 42**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime when trying to access an undefined variable `discunt`.\n   - **Severity:** P0 (Critical)\n\n2. **Line 35**: The `moving_average` function does not handle the case where `len(values)` is less than or equal to `window`. This will result in an empty list being returned, which might not be the expected behavior.\n   - **Severity:** P1 (Major)\n\n3. **Line 26**: The `normalize_slug` function does not handle cases where `value` contains characters other than letters and spaces. It may produce unexpected results if `value` includes punctuation or special characters.\n   - **Severity:** P2 (Minor)\n\nThese are the identified bugs based on the criteria provided.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_12.py",
+        "success": false,
+        "task_id": "review-12",
+        "tool_calls": 0,
+        "wall_clock_seconds": 5.48422074993141
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 2,
+        "found_bug_ids": [
+          "13-wrong-variable",
+          "13-missing-null-check"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 24**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime when trying to access an undefined variable `discunt`.  \n   - **Severity:** P0 (Critical)\n\n2. **Line 35**: The function `customer_label` does not handle the case where `customer` is `None`. If `customer` is `None`, calling `.get('name')` on it will raise a `TypeError`.  \n   - **Severity:** P1 (High)\n\nThese are the only real runtime or logic bugs identified in the code. The rest of the code appears to be free of such issues based on the given criteria.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_13.py",
+        "success": false,
+        "task_id": "review-13",
+        "tool_calls": 0,
+        "wall_clock_seconds": 4.598571083974093
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 24**: `customer_label` function can raise an AttributeError if `name` is None. This happens when `customer.get('name')` returns None and `.strip()` or `.title()` is called on it.\n   - **Description**: Potential `AttributeError` if `customer['name']` is `None`.\n   - **Severity**: P1\n\n2. **Line 33**: The `moving_average` function does not handle the case where `len(values)` is less than `window`. It should check this condition before entering the loop.\n   - **Description**: Potential `IndexError` if `len(values)` is less than `window`.\n   - **Severity**: P1\n\n3. **Line 45**: The `summarize_orders` function always increments `count` by 1, even if the order dictionary is empty. This could lead to incorrect counts if the input list contains empty dictionaries.\n   - **Description**: Incorrect count if `orders` contains empty dictionaries.\n   - **Severity**: P2\n\nThese are the runtime and logic bugs identified in the code.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_14.py",
+        "success": false,
+        "task_id": "review-14",
+        "tool_calls": 0,
+        "wall_clock_seconds": 6.546840124996379
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 2,
+        "found_bug_ids": [
+          "15-wrong-variable",
+          "15-missing-null-check"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 24**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name.\n   - **Severity**: P0 (Runtime Error)\n\n2. **Line 36**: `name = customer.get('name')` may return `None`, and calling `.strip().title()` on `None` will raise an AttributeError.  \n   - **Description**: Potential AttributeError when `customer['name']` is not present or is `None`.\n   - **Severity**: P1 (Logic Error)\n\nThese are the only real runtime or logic bugs found in the code. The rest of the code appears to be free from such issues based on the given criteria.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_15.py",
+        "success": false,
+        "task_id": "review-15",
+        "tool_calls": 0,
+        "wall_clock_seconds": 4.6076762499287724
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "1. **Line 26**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime because `discunt` is not defined. **Severity: P0**\n\n2. **Line 38**: The function `summarize_orders` does not handle the case where the 'amount' key might not exist in the dictionary, although it uses `.get('amount', 0)` which provides a default value of 0 if 'amount' is missing. However, this is more of a potential logic issue rather than a bug since it defaults to 0. If the intention was to raise an error when 'amount' is missing, then this would be a bug. **Severity: P2** (This is more of a potential logic issue depending on requirements)\n\n3. **Line 47**: The `bucketize` function does not handle values equal to 10 or 100. It only checks for less than these values. Depending on the requirement, this could be a logic bug if values equal to 10 or 100 should fall into specific buckets. **Severity: P2** (Depends on the intended behavior)",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_16.py",
+        "success": false,
+        "task_id": "review-16",
+        "tool_calls": 0,
+        "wall_clock_seconds": 7.031825042096898
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "17-off-by-one"
+        ],
+        "ok": true,
+        "output_quality": 2,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 39**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime because `discunt` is not defined. **Severity: P0**\n\n2. **Line 48**: The function `summarize_orders` does not handle the case where the 'amount' key might not exist in the dictionary, although it uses `.get('amount', 0)` which mitigates this issue. However, the function does not account for the possibility of other keys being missing or incorrect types, which could lead to unexpected behavior. **Severity: P2**\n\n3. **Line 26**: In the `moving_average` function, the loop should iterate up to `len(values) - window + 1` instead of `len(values) - window` to include the last possible window in the list. **Severity: P1**\n\nThese are the identified bugs based on the criteria provided.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_17.py",
+        "success": false,
+        "task_id": "review-17",
+        "tool_calls": 0,
+        "wall_clock_seconds": 5.7615822500083596
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "1. **Line 20**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime because `discunt` is not defined. **Severity: P0**\n\n2. **Line 33**: `name.strip().title()` could raise an `AttributeError` if `name` is `None`. The `strip()` and `title()` methods cannot be called on `None`. **Severity: P1**\n\nNo other bugs were found in the provided code.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_18.py",
+        "success": false,
+        "task_id": "review-18",
+        "tool_calls": 0,
+        "wall_clock_seconds": 3.2475471668876708
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "Here are the bugs found in the provided Python file:\n\n1. **Line 39**: `return subtotal - discunt` should be `return subtotal - discount`. This is a typo that will cause a `NameError` at runtime because `discunt` is not defined. **Severity: P0**\n\n2. **Line 48**: The function `summarize_orders` does not handle the case where the 'amount' key might not exist in the dictionary, although it uses `.get('amount', 0)` which mitigates this issue. However, the function does not account for the possibility of other keys being missing or incorrect types. This is more of a potential logic bug depending on input data. **Severity: P2**\n\n3. **Line 26**: In the `moving_average` function, the loop should iterate up to `len(values) - window + 1` to include the last possible window. As it stands, it misses the last window if `window > 1`. **Severity: P1**\n\nThese are the identified bugs based on the criteria provided.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_19.py",
+        "success": false,
+        "task_id": "review-19",
+        "tool_calls": 0,
+        "wall_clock_seconds": 5.813235124805942
+      }
+    ],
+    "summary": {
+      "bug_recall": 0.34,
+      "expected_bugs": 50,
+      "failed": 0,
+      "found_bugs": 17,
+      "name": "batchcode_parallel",
+      "ok": 20,
+      "per_task_wall_clock_seconds": [
+        4.327736292034388,
+        5.806670959107578,
+        8.44882829207927,
+        3.506283540977165,
+        3.6751946250442415,
+        6.397705750074238,
+        5.139264208031818,
+        3.99621191713959,
+        4.976435624994338,
+        4.1555985829327255,
+        6.304891959065571,
+        6.844312000088394,
+        5.48422074993141,
+        4.598571083974093,
+        6.546840124996379,
+        4.6076762499287724,
+        7.031825042096898,
+        5.7615822500083596,
+        3.2475471668876708,
+        5.813235124805942
+      ],
+      "quality_avg": 2.1,
+      "success_rate": 0.05,
+      "tasks": 20,
+      "tool_calls": 0,
+      "wall_clock_seconds": 14.27026095916517
+    }
+  },
+  "benchmark": "opencode_baseline_code_review",
+  "comparison": {
+    "bug_recall_delta_batchcode_minus_sglang_sequential": 0.0,
+    "quality_avg_delta_batchcode_minus_sglang_sequential": 0.050000000000000266,
+    "speedup_sglang_sequential_over_batchcode": 8.647050427325645,
+    "wall_clock_seconds_saved": 109.12540516583249
+  },
+  "fixture_dir": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review",
+  "max_inflight": 10,
+  "model": "Qwen/Qwen2.5-32B-Instruct",
+  "n": 20,
+  "openai_base_url": "https://api.openai.com/v1",
+  "openai_model": "",
+  "seed": 1337,
+  "sglang_sequential": {
+    "results": [
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "0-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. **Line 22**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 33**: `name.strip().title()` could raise an `AttributeError` if `name` is `None`.  \n   - **Description**: The `get` method returns `None` if the key is not found, and calling `.strip()` on `None` will raise an error.\n   - **Severity**: P1\n\n3. **Line 44**: `order.get('amount', 0)` assumes that `'amount'` is always an integer, but it might not be.  \n   - **Description**: If `'amount'` is not an integer, this could lead to unexpected behavior or errors.\n   - **Severity**: P2",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_00.py",
+        "success": false,
+        "task_id": "review-00",
+        "tool_calls": 0,
+        "wall_clock_seconds": 5.0227330001071095
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "1. **Line 25**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 33**: The loop range should be `range(0, len(values) - window + 1)` to include the last possible window.  \n   - **Description**: Incorrect range calculation leading to missing the last window's average.\n   - **Severity**: P1\n\n3. **Line 40**: `name.strip().title()` could raise an `AttributeError` if `name` is `None`.  \n   - **Description**: Potential `AttributeError` when calling methods on `None`.\n   - **Severity**: P1\n\nThese are the runtime and logic bugs identified in the provided Python file.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_01.py",
+        "success": false,
+        "task_id": "review-01",
+        "tool_calls": 0,
+        "wall_clock_seconds": 4.9357527499087155
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "1. **Line 25**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 34**: `order.get('amount', 0)` assumes the value is an integer, but it could be any type. If 'amount' is not an integer, this will cause a type error when adding to `total`.  \n   - **Description**: Potential type error if 'amount' is not an integer.\n   - **Severity**: P1\n\n3. **Line 16**: `normalize_slug(value: str) -> str` does not handle cases where `value` might be empty or only contains spaces, which would result in an empty string. This may not be intended behavior depending on use case.  \n   - **Description**: Empty input results in an empty output, which may not be desired.\n   - **Severity**: P2",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_02.py",
+        "success": false,
+        "task_id": "review-02",
+        "tool_calls": 0,
+        "wall_clock_seconds": 5.625763250049204
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 2,
+        "found_bug_ids": [
+          "3-wrong-variable",
+          "3-off-by-one"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. **Line 29**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name.\n   - **Severity**: P0 (Runtime Error)\n\n2. **Line 34**: The loop range should be `range(0, len(values) - window + 1)` to include the last possible window.  \n   - **Description**: Incorrect range calculation leading to missing last window average.\n   - **Severity**: P1 (Logic Bug)\n\nNo other significant runtime or logic bugs were found in the provided code.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_03.py",
+        "success": false,
+        "task_id": "review-03",
+        "tool_calls": 0,
+        "wall_clock_seconds": 3.500852500088513
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "4-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. **Line 22**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 33**: `name.strip().title()` could raise an `AttributeError` if `name` is `None`.  \n   - **Description**: The `get` method returns `None` if the key is not found, and calling `.strip().title()` on `None` will raise an error.\n   - **Severity**: P1\n\nNo other runtime or logic bugs were identified in the provided code.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_04.py",
+        "success": false,
+        "task_id": "review-04",
+        "tool_calls": 0,
+        "wall_clock_seconds": 3.8866961251478642
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 2,
+        "found_bug_ids": [
+          "5-missing-null-check",
+          "5-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. **Line 45**: `return subtotal - discunt`  \n   - **Description**: The variable name `discunt` is misspelled; it should be `discount`.\n   - **Severity**: P0 (Runtime error)\n\n2. **Line 36**: `for start in range(0, len(values) - window):`  \n   - **Description**: The loop should run until `len(values) - window + 1` to include the last possible window.\n   - **Severity**: P1 (Logic bug)\n\n3. **Line 27**: `name = customer.get('name')`  \n   - **Description**: If `customer` is `None`, calling `.get()` on it will raise an AttributeError. This should be handled.\n   - **Severity**: P1 (Runtime error)\n\n4. **Line 28**: `region = customer.get('region', 'unknown')`  \n   - **Description**: Similar to line 27, if `customer` is `None`, this will also raise an AttributeError.\n   - **Severity**: P1 (Runtime error)\n\n5. **Line 19**: `if part for part in value.lower().split() if part:`  \n   - **Description**: The generator expression inside `join` is missing a condition. It should be `if part`.\n   - **Severity**: P2 (Logic bug, but does not cause runtime errors)",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_05.py",
+        "success": false,
+        "task_id": "review-05",
+        "tool_calls": 0,
+        "wall_clock_seconds": 7.747041166992858
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "1. **Line 24**: `for start in range(0, len(values) - window):` should be `for start in range(0, len(values) - window + 1):`. The loop should include the last possible window.  \n   - **Description**: The current implementation skips the last possible window of values.\n   - **Severity**: P1\n\n2. **Line 33**: `name = customer.get('name')` could return `None`, and calling `.strip().title()` on `None` will raise an `AttributeError`.\n   - **Description**: If `customer['name']` is not present or is `None`, this will cause a runtime error.\n   - **Severity**: P0\n\n3. **Line 33**: `name.strip().title()` assumes `name` is a string, but if `customer` is `None`, `name` will also be `None`.\n   - **Description**: This can lead to a `TypeError` when trying to call methods on `None`.\n   - **Severity**: P0\n\n4. **Line 41**: `count += 1` increments count for every order, regardless of whether the order has an 'amount' key.\n   - **Description**: This logic may not be correct if some orders are expected to have no 'amount'.\n   - **Severity**: P2\n\n5. **Line 41**: `total += order.get('amount', 0)` uses a default value of `0` for missing keys, which might not be the intended behavior if missing keys should be treated differently.\n   - **Description**: This could lead to incorrect totals if missing keys should not contribute to the total.\n   - **Severity**: P2",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_06.py",
+        "success": false,
+        "task_id": "review-06",
+        "tool_calls": 0,
+        "wall_clock_seconds": 9.295292374910787
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "7-off-by-one"
+        ],
+        "ok": true,
+        "output_quality": 2,
+        "output_text": "1. **Line 25**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 34**: The loop condition should be `for start in range(0, len(values) - window + 1):` to include the last possible window.\n   - **Description**: The current loop condition skips the last possible window, leading to incorrect results.\n   - **Severity**: P1\n\n3. **Line 46**: The function `summarize_orders` does not handle cases where 'amount' is not an integer or is missing properly. It assumes all values are integers and adds them directly.\n   - **Description**: If 'amount' is not an integer or is missing, it could lead to unexpected behavior or errors.\n   - **Severity**: P2",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_07.py",
+        "success": false,
+        "task_id": "review-07",
+        "tool_calls": 0,
+        "wall_clock_seconds": 5.284552250057459
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "8-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. **Line 24**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 33**: The loop range should be `range(0, len(values) - window + 1)` to include the last possible window.  \n   - **Description**: Incorrect range calculation leading to missing the last possible window average.\n   - **Severity**: P1\n\nThese are the runtime and logic bugs identified in the provided Python file.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_08.py",
+        "success": false,
+        "task_id": "review-08",
+        "tool_calls": 0,
+        "wall_clock_seconds": 3.5559274579863995
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 2,
+        "found_bug_ids": [
+          "9-off-by-one",
+          "9-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. **Line 45**: `return subtotal - discunt`  \n   - **Description**: Typo in variable name `discunt` should be `discount`.  \n   - **Severity**: P0 (Runtime error, will raise `NameError`)\n\n2. **Line 36**: `for start in range(0, len(values) - window):`  \n   - **Description**: The loop should run until `len(values) - window + 1` to include the last possible window.  \n   - **Severity**: P1 (Logic bug, excludes the last possible moving average calculation)\n\n3. **Line 27**: `name = customer.get('name')`  \n   - **Description**: If `customer` is `None`, `customer.get('name')` will raise a `TypeError`.  \n   - **Severity**: P1 (Runtime error, will raise `TypeError` if `customer` is `None`)",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_09.py",
+        "success": false,
+        "task_id": "review-09",
+        "tool_calls": 0,
+        "wall_clock_seconds": 5.6483078331220895
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "1. **Line 39**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typo in variable name causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 46**: `order.get('amount', 0)` assumes the key 'amount' is an integer, but the function signature specifies `dict[str, int]`, which could lead to unexpected behavior if the dictionary contains non-integer values.\n   - **Description**: Potential type mismatch issue.\n   - **Severity**: P1\n\n3. **Line 35**: The `invoice_total` function does not handle cases where the input dictionary might not contain 'quantity' or 'price' keys, leading to a `KeyError`.\n   - **Description**: Missing key handling in dictionary access.\n   - **Severity**: P1\n\n4. **Line 37**: The `invoice_total` function applies a discount only if the subtotal exceeds 1000, but it doesn't account for the case where the discount calculation might result in a negative value (though unlikely with positive quantities and prices).\n   - **Description**: Potential logic flaw in discount application.\n   - **Severity**: P2\n\n5. **Line 28**: The `moving_average` function does not include the last window of data in its calculations because the loop runs until `len(values) - window`.\n   - **Description**: Last window of data is excluded from averaging.\n   - **Severity**: P2",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_10.py",
+        "success": false,
+        "task_id": "review-10",
+        "tool_calls": 0,
+        "wall_clock_seconds": 8.263377083931118
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 2,
+        "found_bug_ids": [
+          "11-wrong-variable",
+          "11-off-by-one"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. **Line 29**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typo in variable name `discunt` instead of `discount`.\n   - **Severity**: P0 (Runtime error)\n\n2. **Line 34**: The loop range should be `range(0, len(values) - window + 1)` to include the last possible window.\n   - **Description**: The loop range is off by one, causing the last possible window to be missed.\n   - **Severity**: P1 (Logic bug)\n\n3. **Line 45**: The function `summarize_orders` does not handle the case where 'amount' is not an integer or is missing.\n   - **Description**: If 'amount' is not an integer or is missing, it will add 0, which might not be the intended behavior.\n   - **Severity**: P2 (Potential logic issue)\n\n4. **Line 16**: The `normalize_slug` function may return a string with leading or trailing dashes if the input has leading or trailing spaces.\n   - **Description**: Leading or trailing spaces in the input can result in leading or trailing dashes in the output.\n   - **Severity**: P2 (Potential logic issue)",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_11.py",
+        "success": false,
+        "task_id": "review-11",
+        "tool_calls": 0,
+        "wall_clock_seconds": 6.970148915890604
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "1. **Line 39**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 46**: `order.get('amount', 0)` assumes the key 'amount' is an integer, but the function signature specifies `dict[str, int]`, which could lead to unexpected behavior if the dictionary contains non-integer values.\n   - **Description**: Potential type mismatch; the function expects `int` values but does not enforce or check this.\n   - **Severity**: P1\n\n3. **Line 35**: The `invoice_total` function does not handle cases where the input dictionary might not contain 'quantity' or 'price' keys, leading to a `KeyError`.\n   - **Description**: Missing key validation for 'quantity' and 'price'.\n   - **Severity**: P1\n\n4. **Line 37**: The `invoice_total` function applies a 10% discount only if the subtotal exceeds 1000, but it doesn't account for the case where the discount calculation might result in a negative value (though unlikely with positive quantities and prices).\n   - **Description**: Potential logic flaw in discount application.\n   - **Severity**: P2\n\nThese are the runtime and logical bugs identified in the provided Python file.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_12.py",
+        "success": false,
+        "task_id": "review-12",
+        "tool_calls": 0,
+        "wall_clock_seconds": 7.709929457865655
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 2,
+        "found_bug_ids": [
+          "13-wrong-variable",
+          "13-missing-null-check"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. **Line 24**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typo in variable name causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 35**: The loop range should be `range(0, len(values) - window + 1)` to include the last possible window.  \n   - **Description**: Incorrect range calculation leading to missing the last window's average.\n   - **Severity**: P1\n\n3. **Line 46**: `name.strip().title()` could raise an `AttributeError` if `name` is `None`.  \n   - **Description**: Potential `AttributeError` when `customer['name']` is `None`.\n   - **Severity**: P1\n\n4. **Line 57**: The function `summarize_orders` does not handle cases where 'amount' might not exist in the dictionary.  \n   - **Description**: While it uses `.get('amount', 0)`, it doesn't account for potential non-integer values or other types of errors.\n   - **Severity**: P2",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_13.py",
+        "success": false,
+        "task_id": "review-13",
+        "tool_calls": 0,
+        "wall_clock_seconds": 6.39091158285737
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "1. **Line 22**: `customer_label` function can return a string with leading or trailing spaces if the 'name' key is present but contains only spaces. This can be fixed by using `str.strip()` before calling `title()`.  \n   - **Description**: Potential leading/trailing spaces in the returned label.\n   - **Severity**: P1\n\n2. **Line 33**: The `moving_average` function does not include the last possible window in its calculation because the loop runs until `len(values) - window`. It should run until `len(values) - window + 1` to include the last window.  \n   - **Description**: Last possible window is excluded from the moving average calculation.\n   - **Severity**: P1\n\n3. **Line 44**: The `summarize_orders` function always increments the count, even if the order dictionary is empty or does not contain an 'amount' key. This could lead to incorrect counts if orders are expected to have an 'amount'.  \n   - **Description**: Count is incremented even for orders without an 'amount'.\n   - **Severity**: P1\n\nThese issues are runtime or logic bugs that could affect the functionality of the code.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_14.py",
+        "success": false,
+        "task_id": "review-14",
+        "tool_calls": 0,
+        "wall_clock_seconds": 6.671021915972233
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "15-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 2,
+        "output_text": "1. **Line 24**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 37**: `for start in range(0, len(values) - window):` should be `for start in range(0, len(values) - window + 1):` to include the last possible window.\n   - **Description**: The loop does not include the last possible window of values, leading to incorrect results.\n   - **Severity**: P1\n\n3. **Line 45**: `name = customer.get('name')` can return `None`, and calling `.strip().title()` on it will raise an `AttributeError`.\n   - **Description**: If `customer['name']` is `None`, calling methods on it will cause an error.\n   - **Severity**: P1\n\n4. **Line 52**: `total += order.get('amount', 0)` assumes that 'amount' is always an integer, but `order.get('amount', 0)` could return a non-integer value if 'amount' is present but not an integer.\n   - **Description**: If 'amount' is not an integer, this could lead to unexpected behavior or errors.\n   - **Severity**: P2",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_15.py",
+        "success": false,
+        "task_id": "review-15",
+        "tool_calls": 0,
+        "wall_clock_seconds": 7.584253083914518
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "1. **Line 29**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typo in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 38**: The function `summarize_orders` does not handle the case where the 'amount' key is missing from the dictionary. It assumes all dictionaries have an 'amount' key or can be safely assumed to be 0 if not present, but it doesn't check for other potential issues.\n   - **Description**: Potential logic error if the input dictionaries are not as expected.\n   - **Severity**: P1\n\n3. **Line 47**: The `bucketize` function does not handle values that are exactly 100. Values equal to 100 will be categorized under 'mid', which might not be the intended behavior.\n   - **Description**: Logic issue with categorization of boundary values.\n   - **Severity**: P2\n\n4. **Line 25**: The `invoice_total` function does not handle cases where the input list `lines` is empty or contains dictionaries without 'quantity' and 'price' keys.\n   - **Description**: Potential runtime error due to missing keys in dictionary.\n   - **Severity**: P1",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_16.py",
+        "success": false,
+        "task_id": "review-16",
+        "tool_calls": 0,
+        "wall_clock_seconds": 7.957157583907247
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 0,
+        "found_bug_ids": [],
+        "ok": true,
+        "output_quality": 1,
+        "output_text": "1. **Line 35**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 47**: The function `summarize_orders` does not handle the case where the 'amount' key is missing from an order dictionary.  \n   - **Description**: If 'amount' is missing, it will default to 0, which might not be the intended behavior.\n   - **Severity**: P1\n\n3. **Line 29**: The `moving_average` function does not include the last possible window in its calculation.  \n   - **Description**: The loop should run until `len(values) - window + 1` to include all possible windows.\n   - **Severity**: P1\n\n4. **Line 18**: The `normalize_slug` function may return an empty string if `value` contains only spaces or no valid parts.  \n   - **Description**: This could lead to unexpected behavior depending on how the slug is used later.\n   - **Severity**: P2",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_17.py",
+        "success": false,
+        "task_id": "review-17",
+        "tool_calls": 0,
+        "wall_clock_seconds": 6.535931332968175
+      },
+      {
+        "error": "",
+        "expected_bug_count": 2,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "18-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 3,
+        "output_text": "1. **Line 22**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 33**: `name.strip().title()` could raise an `AttributeError` if `name` is `None`.  \n   - **Description**: The `strip()` and `title()` methods cannot be called on `None`.\n   - **Severity**: P1\n\n3. **Line 44**: `order.get('amount', 0)` assumes the key `'amount'` exists in the dictionary, but it's not validated. If the key doesn't exist and no default is provided, it will return `0`, which might not be the intended behavior.\n   - **Description**: Potential logic bug due to missing validation or handling of non-existent keys.\n   - **Severity**: P2",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_18.py",
+        "success": false,
+        "task_id": "review-18",
+        "tool_calls": 0,
+        "wall_clock_seconds": 5.300854540895671
+      },
+      {
+        "error": "",
+        "expected_bug_count": 3,
+        "found_bug_count": 1,
+        "found_bug_ids": [
+          "19-wrong-variable"
+        ],
+        "ok": true,
+        "output_quality": 2,
+        "output_text": "1. **Line 37**: `return subtotal - discunt` should be `return subtotal - discount`.  \n   - **Description**: Typographical error in variable name, causing a `NameError`.\n   - **Severity**: P0\n\n2. **Line 26**: The loop in the `moving_average` function should iterate up to `len(values) - window + 1` to include the last possible window.\n   - **Description**: The current range excludes the last possible window of values, leading to incorrect results.\n   - **Severity**: P1\n\n3. **Line 44**: The `summarize_orders` function does not handle cases where the 'amount' key is missing or invalid (e.g., non-integer).\n   - **Description**: If an order dictionary does not contain a valid 'amount', it could lead to unexpected behavior or errors.\n   - **Severity**: P2\n\nThese are the runtime and logic bugs identified in the provided code.",
+        "path": "/Users/alityb/projects/parallel-agents/tests/benchmarks/generated/code_review/synthetic_review_19.py",
+        "success": false,
+        "task_id": "review-19",
+        "tool_calls": 0,
+        "wall_clock_seconds": 5.496546040987596
+      }
+    ],
+    "summary": {
+      "bug_recall": 0.34,
+      "expected_bugs": 50,
+      "failed": 0,
+      "found_bugs": 17,
+      "name": "sglang_sequential",
+      "ok": 20,
+      "per_task_wall_clock_seconds": [
+        5.0227330001071095,
+        4.9357527499087155,
+        5.625763250049204,
+        3.500852500088513,
+        3.8866961251478642,
+        7.747041166992858,
+        9.295292374910787,
+        5.284552250057459,
+        3.5559274579863995,
+        5.6483078331220895,
+        8.263377083931118,
+        6.970148915890604,
+        7.709929457865655,
+        6.39091158285737,
+        6.671021915972233,
+        7.584253083914518,
+        7.957157583907247,
+        6.535931332968175,
+        5.300854540895671,
+        5.496546040987596
+      ],
+      "quality_avg": 2.05,
+      "success_rate": 0.0,
+      "tasks": 20,
+      "tool_calls": 0,
+      "wall_clock_seconds": 123.39566612499766
+    }
+  },
+  "started_at": 1778454541.246099
+}

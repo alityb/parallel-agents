@@ -1,0 +1,72 @@
+{
+  "base_url": "http://localhost:30000",
+  "batchagent": {
+    "backend_request_latency_p50": 0.8529661661013961,
+    "backend_request_latency_p95": 1.2301556668244302,
+    "backend_requests": 201,
+    "failed": 0,
+    "failure_samples": [],
+    "mode": "batchagent",
+    "ok": 100,
+    "throughput_agents_per_sec": 13.75237673322241,
+    "tool_calls_executed": 10,
+    "tool_calls_requested": 100,
+    "ttft_p50": 0.5843594579491764,
+    "ttft_p95": 0.9590069158002734,
+    "ttft_p99": 1.1071409159339964,
+    "ttft_samples": 201,
+    "usage": {
+      "completion_tokens": 0,
+      "prompt_tokens": 0,
+      "total_tokens": 0
+    },
+    "wall_clock_seconds": 7.271470374893397
+  },
+  "benchmark": "backend_raw_vs_batchagent",
+  "deltas": {
+    "tool_calls_saved_by_batchagent": 90,
+    "total_tokens_batchagent_minus_raw": 0,
+    "wall_clock_seconds_batchagent_minus_raw": -2.2255262909457088
+  },
+  "label": "qwen25_32b_h100_sglang_400ms",
+  "max_inflight": 32,
+  "metrics_after_batchagent": {
+    "gpu_utilization": 0.15,
+    "prefix_cache_hit_rate": 0.9995395948434622
+  },
+  "metrics_after_raw": {
+    "gpu_utilization": 0.13,
+    "prefix_cache_hit_rate": 0.9995176073323685
+  },
+  "metrics_before": {
+    "gpu_utilization": 0.0,
+    "prefix_cache_hit_rate": 0.9857274401473296
+  },
+  "model": "Qwen/Qwen2.5-32B-Instruct",
+  "n": 100,
+  "raw_endpoint_loop": {
+    "backend_request_latency_p50": 1.026493459008634,
+    "backend_request_latency_p95": 1.706539458129555,
+    "backend_requests": 200,
+    "failed": 0,
+    "failure_samples": [],
+    "mode": "raw_endpoint_loop",
+    "ok": 100,
+    "throughput_agents_per_sec": 10.529644635940757,
+    "tool_calls_executed": 100,
+    "tool_calls_requested": 100,
+    "ttft_p50": 0.7037788331508636,
+    "ttft_p95": 1.4516987081151456,
+    "ttft_p99": 1.7611863748170435,
+    "ttft_samples": 200,
+    "usage": {
+      "completion_tokens": 0,
+      "prompt_tokens": 0,
+      "total_tokens": 0
+    },
+    "wall_clock_seconds": 9.496996665839106
+  },
+  "system_prompt_tokens_target": 2048,
+  "timestamp": 1778452592.0002098,
+  "tool_latency_ms": 400.0
+}

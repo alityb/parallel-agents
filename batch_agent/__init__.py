@@ -17,14 +17,14 @@ from .utils import extract_schema, to_jsonable
 class BatchAgent:
     @classmethod
     async def run(cls, **kwargs: Any) -> list[AgentResult]:
-        spec = BatchSpec(**kwargs)
-        scheduler = cls._scheduler(spec)
+        spec, backend = cls._spec_and_backend(kwargs)
+        scheduler = cls._scheduler(spec, backend)
         return await scheduler.run()
 
     @classmethod
     async def stream(cls, **kwargs: Any) -> AsyncIterator[AgentResult]:
-        spec = BatchSpec(**kwargs)
-        scheduler = cls._scheduler(spec)
+        spec, backend = cls._spec_and_backend(kwargs)
+        scheduler = cls._scheduler(spec, backend)
         async for result in scheduler.stream():
             yield result
 
@@ -204,6 +204,27 @@ class BatchAgent:
     ) -> WaveScheduler:
         plan = TaskCompiler().compile(spec)
         return WaveScheduler(plan, backend or backend_from_url(spec.backend))
+
+    @classmethod
+    def _spec_and_backend(cls, kwargs: dict[str, Any]) -> tuple[BatchSpec, BackendAdapter | None]:
+        options = dict(kwargs)
+        runtime = options.pop("runtime", None)
+        if "max_agents" in options and "max_concurrent" not in options:
+            options["max_concurrent"] = options.pop("max_agents")
+        elif "max_agents" in options:
+            options.pop("max_agents")
+
+        backend: BackendAdapter | None = None
+        if runtime is not None:
+            if not isinstance(runtime, BackendAdapter):
+                raise TypeError("runtime must implement BackendAdapter")
+            backend = runtime
+            if hasattr(runtime, "backend"):
+                options.setdefault("backend", getattr(runtime, "backend"))
+            if hasattr(runtime, "model"):
+                options.setdefault("model", getattr(runtime, "model"))
+
+        return BatchSpec(**options), backend
 
 
 def _stage_checkpoint_factory(checkpoint_dir: str | None):

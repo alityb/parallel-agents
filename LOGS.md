@@ -1,5 +1,47 @@
 Record all changes with time and date here. Design choices, mistakes, bugs, etc. inclusive.
 
+## 2026-05-11
+
+### PyPI 0.2.0 release — 2026-05-11
+
+- Updated package/repo metadata after the GitHub rename from `alityb/parallel-agents` to `alityb/batchagent`.
+- Updated deployment defaults in `deploy/` to clone/use `/workspace/batchagent` and `/home/ubuntu/batchagent`.
+- Verified PyPI before upload only had `batch-agent==0.1.0`; kept the existing `pyproject.toml` version `0.2.0` for this release.
+- Test suite before publish: `151 passed, 1 skipped`.
+- Built fresh artifacts: `dist/batch_agent-0.2.0-py3-none-any.whl` and `dist/batch_agent-0.2.0.tar.gz`.
+- `twine check dist/batch_agent-0.2.0*` passed.
+- Uploaded to PyPI: `https://pypi.org/project/batch-agent/0.2.0/`.
+- Verified public PyPI JSON reports latest version `0.2.0` with project URLs pointing to `https://github.com/alityb/batchagent`.
+- Verified fresh virtualenv install from PyPI: `pip install --no-cache-dir batch-agent==0.2.0`; imported `batch_agent` and `batch_agent.runtimes.OpenCodeRuntime` from site-packages.
+
+### NVIDIA Dynamo H100 validation — 2026-05-11
+
+- Host: `ubuntu@3.236.228.107`, NVIDIA H100 80GB, `Qwen/Qwen2.5-32B-Instruct`.
+- Installed/used NVIDIA `ai-dynamo 1.1.1` in `~/sglang-venv`; this is the NVIDIA Dynamo package, launched through module entrypoints rather than a `dynamo` shell command.
+- Launched Dynamo with file discovery and TCP/ZMQ planes:
+  - worker: `python -m dynamo.sglang --model Qwen/Qwen2.5-32B-Instruct --served-model-name Qwen/Qwen2.5-32B-Instruct --discovery-backend file --request-plane tcp --event-plane zmq --namespace dynamo --endpoint dyn://dynamo.backend.generate --enable-cache-report`
+  - frontend: `python -m dynamo.frontend --http-port 8001 --model-name Qwen/Qwen2.5-32B-Instruct --model-path <local HF snapshot> --discovery-backend file --request-plane tcp --event-plane zmq --namespace dynamo --router-mode round-robin --router-min-initial-workers 1 --dyn-chat-processor sglang --enable-streaming-tool-dispatch --strip-anthropic-preamble --tool-call-parser qwen25`
+- Frontend readiness verified: `/v1/models` returned `Qwen/Qwen2.5-32B-Instruct` with `context_window=32768`.
+- Raw Dynamo OpenAI-compatible request with `nvext.agent_hints` returned `ok`; usage was `34` prompt tokens, `2` completion tokens.
+- BatchAgent `DynamoBackend.generate()` with `nvext_agent_hints=True` returned `ok` in `0.182997s`; usage was `34` prompt tokens, `2` completion tokens, `33` cached prompt tokens.
+- BatchAgent `DynamoBackend.generate_streaming()` with `nvext_agent_hints=True` returned `stream-ok` in `0.136123s`.
+- H100 Dynamo slow-tool benchmark result (`tests/benchmarks/results/backend_raw_vs_batchagent/dynamo_qwen25_32b_h100.json`): N=100, 2048-token shared prompt target, 800ms simulated tool latency, `max_inflight=32`, 10 repeated tool keys.
+  - Raw endpoint loop: 100/100 OK, wall `10.503116s`, throughput `9.521/s`, TTFT P50/P95/P99 `0.453779s` / `1.550767s` / `1.677028s`, tool calls `100/100`, total tokens `413,120`.
+  - BatchAgent: 100/100 OK, wall `5.913307s`, throughput `16.911/s`, TTFT P50/P95/P99 `0.345522s` / `0.590411s` / `0.620997s`, tool calls `10/100`, total tokens `435,150`.
+  - Delta: BatchAgent was `4.589809s` faster and saved `90` tool executions; it used `22,030` extra tokens from orchestration/schema/tool-loop overhead.
+
+### Research-summary A vs C on Dynamo/H100 — 2026-05-11
+
+- Added `tests/benchmarks/bench_research_summary.py`.
+- Workload: 20 arXiv paper IDs, two-turn research-summary task, 2048-token shared prompt target, controlled `web_search` tool latency `400ms`, `max_inflight=8`, live Dynamo frontend on port `8001` with `Qwen/Qwen2.5-32B-Instruct`.
+- Conditions:
+  - A: raw endpoint loop holding its concurrency slot during `web_search`.
+  - C: BatchAgent with a `DynamoBackend`-derived adapter, prefix warmup, `nvext_agent_hints=True`, and ToolPool coalescing.
+- Result file: `tests/benchmarks/results/research_summary/dynamo_h100_results.json`.
+- Condition A: 20/20 OK, wall `5.105207s`, turns/agent `2.0`, web searches `20/20` (dedup `1.00x`), TTFT turn-1 P50/P95 `0.208019s` / `1.412496s`, TTFT turn-2 P50/P95 `0.200594s` / `0.237270s`, prefix cache hit rate from cached prompt tokens `93.893%`.
+- Condition C: 20/20 OK, wall `3.242424s`, turns/agent `2.0`, web searches `9/20` (dedup `2.22x`), TTFT turn-1 P50/P95 `0.193772s` / `0.225946s`, TTFT turn-2 P50/P95 `0.202845s` / `0.238164s`, prefix cache hit rate from cached prompt tokens `98.803%`.
+- Delta: BatchAgent C was `1.862783s` faster (`1.57x` speedup), saved `11` web-search executions, and improved warm-prefix cached-token rate by about `4.91` percentage points.
+
 ## 2026-05-10
 
 ### README rewrite around purpose, results, and research context — 2026-05-10
@@ -992,3 +1034,21 @@ Follow-up vLLM 0.6.6.post1 patched run on A10G: `/internal/prefetch` returned 20
   2. Rerun D/E with `--enable-chunked-prefill` to measure chunked-prefill impact
   3. Record cost-per-task comparison at N=100: self-hosted vLLM vs Anthropic API
   4. Bump version to 0.2.0 after remaining live SGLang/distributed gaps are resolved
+
+### H100 research-summary benchmark: Dynamo vs SGLang vs vLLM — 2026-05-11
+
+Instance: H100, `Qwen/Qwen2.5-32B-Instruct`, 20 fixed arXiv paper IDs, 2-turn research-summary task, 2048-token shared prompt target, deterministic 400ms `web_search` grouped by topic. Condition A is a raw OpenAI-compatible endpoint loop that holds a concurrency slot during tool wait. Condition C is BatchAgent with the same backend forwards plus scheduler/tool-pool coalescing. Raw result files:
+- `tests/benchmarks/results/research_summary/dynamo_h100_results.json`
+- `tests/benchmarks/results/research_summary/sglang_h100_results.json`
+- `tests/benchmarks/results/research_summary/vllm_h100_results.json`
+
+| Backend | Condition | Wall | TTFT P50 | TTFT P95 | Prefix cache hit | Tool dedup |
+|---|---:|---:|---:|---:|---:|---:|
+| Dynamo on SGLang `:8001` | A | 5.105s | 0.201s | 1.381s | 93.9% | 1.00x |
+| Dynamo on SGLang `:8001` | C | 3.242s | 0.194s | 0.238s | 98.8% | 2.22x |
+| SGLang `:30000` | A | 6.361s | 0.187s | 2.590s | 0.0% | 1.00x |
+| SGLang `:30000` | C | 3.158s | 0.191s | 0.219s | 98.6% | 2.22x |
+| vLLM `:8000` | A | 4.765s | 0.265s | 1.175s | 96.2% | 1.00x |
+| vLLM `:8000` | C | 2.766s | 0.244s | 0.308s | 97.5% | 2.22x |
+
+Direct comparison: BatchAgent improved wall-clock by 1.57x on Dynamo, 2.01x on standalone SGLang, and 1.72x on vLLM. In all C runs, tool coalescing reduced 20 requested web searches to 9 actual executions. vLLM was not already running on the H100; it was started with prefix caching enabled and `--max-model-len 8192` because the 2048-token shared prompt target tokenizes above the 4096 context cap for this Qwen chat template.

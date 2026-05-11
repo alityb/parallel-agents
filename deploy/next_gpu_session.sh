@@ -5,7 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO=/home/ubuntu/parallel-agents
+REPO=/home/ubuntu/batchagent
 MODEL=Qwen/Qwen2.5-7B-Instruct
 RESULTS=/tmp/session_results
 VLLM_INSTALL_MODE="${VLLM_INSTALL_MODE:-wheel}"

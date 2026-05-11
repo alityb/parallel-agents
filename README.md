@@ -1,59 +1,115 @@
 # BatchAgent
 
-BatchAgent is a Python SDK for running many LLM agents against many inputs.
+BatchAgent is a Python SDK for running many tool-using LLM agents against one
+shared inference backend.
 
 It is built for workloads like:
 
 ```text
-"Read these 100 papers and return one structured report per paper."
-"Review these 80 repositories and extract the same findings from each."
-"Run 200 research agents, then reduce their answers into one synthesis."
+Review these 100 files and return one structured bug report per file.
+Research these 100 papers and return one page of findings per paper.
+Run 50 coding/research agents, stream each answer, then reduce them into one synthesis.
 ```
 
-The interface is deliberately small: input list in, structured result list out.
-BatchAgent handles the agent loop, tool execution, retries, validation, result
-streaming, and backend scheduling.
+The point is simple: if 100 agents share the same system prompt, tool set, and
+workflow shape, they should not each recompute the same prefill or execute the
+same tool call independently. BatchAgent coordinates the agent loop, tool pool,
+prefix warming, result streaming, and backend scheduling so vLLM, SGLang, or
+Dynamo can reuse shared work.
 
-It works with API backends, but the main target is self-hosted inference through
-vLLM, SGLang, and NVIDIA Dynamo, where shared prefixes and request scheduling
-actually matter.
+This is not a general agent framework. It is a batch execution engine: input
+list in, structured result list out.
 
-## Why this exists
+## Results
 
-There are good tools for parallel coding agents, and good tools for fast LLM
-serving. The gap is the layer between them.
+### OpenCode sessions on shared SGLang
 
-Existing orchestration tools can spawn many agents, but usually do not reason
-about inference efficiency. Inference engines like vLLM and SGLang can reuse KV
-cache and batch requests, but they do not know that 100 requests are sibling
-agents in the same workflow.
+Hardware: H100, `Qwen/Qwen2.5-32B-Instruct`, real OpenCode CLI sessions
+(`opencode run` subprocesses).
 
-BatchAgent is that orchestration layer:
+Condition A is isolated execution with a cache flush between sessions. Condition
+C is parallel execution against one shared SGLang server with the shared prefix
+warmed once.
 
-- Extract and reuse a shared system prompt prefix.
-- Run N multi-turn agents concurrently.
-- Release inference slots while agents wait on tools.
-- Coalesce duplicate tool calls.
-- Return Pydantic-validated outputs instead of raw strings.
-- Stream each result as soon as it finishes.
-- Attach Dynamo `nvext.agent_hints` when using Dynamo.
+| N | Isolated wall-clock | Shared SGLang wall-clock | Speedup | Prefill tokens isolated | Prefill tokens shared | Reduction |
+|---:|---:|---:|---:|---:|---:|---:|
+| 5 | 28.77s | 10.14s | 2.84x | 63,903 | 1,981 | 97% |
+| 10 | 53.56s | 19.86s | 2.70x | 128,182 | 4,920 | 96% |
+| 20 | 115.39s | 36.32s | 3.18x | 257,094 | 9,874 | 96% |
+| 50 | 286.72s | 98.00s | 2.93x | 643,918 | 23,605 | 96% |
+| 100 | 573.21s | 190.80s | 3.00x | 1,287,681 | 50,806 | 96% |
 
-This is not a general agent framework. It is a batch execution engine for
-multi-agent workloads.
+The prefill column is the core result. At N=100, isolated inference computes
+1.28M prefill tokens. Shared SGLang computes 50K. Same output, 96% less prefill
+compute.
+
+### Real multi-turn research task
+
+Hardware: H100, `Qwen/Qwen2.5-32B-Instruct`, 20 fixed arXiv paper IDs,
+2048-token shared prompt target, two turns per agent, deterministic 400ms
+`web_search` grouped by topic.
+
+Condition A is a raw endpoint loop that holds its concurrency slot during tool
+wait. Condition C is BatchAgent using the same backend forwards plus tool
+coalescing and scheduler release during tool wait.
+
+Source files:
+
+- `tests/benchmarks/results/research_summary/dynamo_h100_results.json`
+- `tests/benchmarks/results/research_summary/sglang_h100_results.json`
+- `tests/benchmarks/results/research_summary/vllm_h100_results.json`
+
+| Backend | Condition | Wall | TTFT P50 | TTFT P95 | Prefix cache hit | Tool dedup |
+|---|---:|---:|---:|---:|---:|---:|
+| Dynamo on SGLang | A | 5.105s | 0.201s | 1.381s | 93.9% | 1.00x |
+| Dynamo on SGLang | C | 3.242s | 0.194s | 0.238s | 98.8% | 2.22x |
+| SGLang | A | 6.361s | 0.187s | 2.590s | 0.0% | 1.00x |
+| SGLang | C | 3.158s | 0.191s | 0.219s | 98.6% | 2.22x |
+| vLLM | A | 4.765s | 0.265s | 1.175s | 96.2% | 1.00x |
+| vLLM | C | 2.766s | 0.244s | 0.308s | 97.5% | 2.22x |
+
+BatchAgent speedup on this task:
+
+- Dynamo: 1.57x
+- SGLang: 2.01x
+- vLLM: 1.72x
+
+In every BatchAgent run, 20 requested web searches were reduced to 9 actual
+executions through tool coalescing.
+
+## Why This Exists
+
+Existing tools solve different halves of the problem:
+
+- Orchestration tools can spawn many agents, but usually do not reason about KV
+  cache, prefill, or backend scheduling.
+- Inference engines can batch and cache requests, but they do not know that 100
+  requests are sibling agents in the same workflow.
+
+BatchAgent is the layer between them. It gives the inference backend the workload
+shape it can optimize:
+
+- shared system prompt prefix
+- many sibling agent sessions
+- bounded inference concurrency
+- tool waits that do not occupy GPU request slots
+- duplicate tool calls that can be coalesced
+- scheduler hints for Dynamo-compatible backends
 
 ## Install
+
+PyPI: `https://pypi.org/project/batch-agent/`
 
 ```bash
 pip install batch-agent
 ```
 
-Optional extras:
+From source:
 
 ```bash
-pip install "batch-agent[bedrock]"
-pip install "batch-agent[vllm]"
-pip install "batch-agent[redis]"
-pip install "batch-agent[dashboard]"
+git clone https://github.com/alityb/batchagent.git
+cd batchagent
+pip install -e .
 ```
 
 Requires Python 3.10+.
@@ -66,151 +122,95 @@ from pydantic import BaseModel
 
 class PaperSummary(BaseModel):
     title: str
-    benchmark: str
-    main_result: str
+    contribution: str
+    relevance: str
 
 results = await BatchAgent.run(
-    task="Summarize this paper and extract benchmark details:\n\n{paper}",
+    task="Summarize this paper and extract the key result:\n\n{paper}",
     inputs=[{"paper": text} for text in papers],
     tools=[Tool.web_search, Tool.read_file],
     output_schema=PaperSummary,
-    model="Qwen/Qwen2.5-7B-Instruct",
+    model="Qwen/Qwen2.5-32B-Instruct",
     backend="sglang://localhost:30000",
     max_inflight=32,
     max_turns=3,
 )
-
-for result in results:
-    if result.ok:
-        print(result.output.benchmark)
-    else:
-        print(result.error)
 ```
 
 Stream results as they finish:
 
 ```python
 async for result in BatchAgent.stream(...):
-    handle(result)
+    print(result.job_id, result.output)
 ```
 
 Plan -> map -> reduce:
 
 ```python
-results, synthesis = await BatchAgent.run_with_map_reduce(
+results, paper = await BatchAgent.run_with_map_reduce(
     plan_prompt="Generate 20 research questions about: {topic}",
-    plan_inputs={"topic": "KV cache optimization"},
-    plan_output_schema=ResearchPlan,   # must expose items: list[str]
-    task="Answer this research question: {item}",
+    plan_inputs={"topic": "KV cache optimization for multi-agent inference"},
+    plan_output_schema=ResearchPlan,  # items: list[str]
+    task="Research this question: {item}",
     output_schema=ResearchAnswer,
-    reduce="Synthesize the {n} answers into a survey.",
+    reduce="Synthesize the answers into a survey.",
     reduce_schema=SurveyPaper,
     tools=[Tool.web_search],
-    model="Qwen/Qwen2.5-7B-Instruct",
+    model="Qwen/Qwen2.5-32B-Instruct",
     backend="sglang://localhost:30000",
 )
 ```
 
+OpenCode runtime:
+
+```python
+from batch_agent import BatchAgent
+from batch_agent.runtimes import OpenCodeRuntime
+
+results = await BatchAgent.run(
+    runtime=OpenCodeRuntime(
+        backend="sglang://localhost:30000",
+        model="Qwen/Qwen2.5-32B-Instruct",
+    ),
+    task="Review this file for bugs: {file}",
+    inputs=[{"file": f} for f in files],
+    max_agents=20,
+)
+```
+
+Each worker runs `opencode run` as a subprocess with
+`OPENCODE_CONFIG_CONTENT` pointed at the shared SGLang/vLLM server.
+
 ## Backends
 
-| Backend | URL | Status |
+| Backend | URL | Notes |
 |---|---|---|
-| vLLM | `vllm://localhost:8000` | Live A10G tested |
-| SGLang | `sglang://localhost:30000` | Live A10G tested |
-| NVIDIA Dynamo | `dynamo://localhost:8000` | Live A10G smoke tested with `nvext.agent_hints` |
-| Anthropic API | `anthropic://` | Implemented, API-mode only |
-| OpenAI API | `openai://` | Implemented, API-mode only |
-| AWS Bedrock | `bedrock://us-east-1` | Live tested, conservative concurrency |
+| SGLang | `sglang://localhost:30000` | Best current path for shared-prefix OpenCode sessions |
+| vLLM | `vllm://localhost:8000` | Live H100 tested with prefix caching |
+| NVIDIA Dynamo | `dynamo://localhost:8001` | Live H100 tested with `nvext.agent_hints` path |
+| Anthropic API | `anthropic://` | Degraded mode; no direct KV control |
+| OpenAI API | `openai://` | Degraded mode; no direct KV control |
+| AWS Bedrock | `bedrock://us-east-1` | Degraded mode; managed prompt caching only |
 
-API backends are useful, but degraded: you do not control the inference
-scheduler or KV cache. The strongest path is self-hosted vLLM/SGLang/Dynamo.
+API backends are useful for compatibility, but the main performance story is
+self-hosted inference where the SDK can align orchestration with the serving
+engine.
 
 ## What BatchAgent Optimizes
 
-| Optimization | Implemented | Verified |
-|---|---:|---|
-| Multi-turn agent loop | yes | tests |
-| Structured Pydantic output | yes | tests |
-| Tool coalescing | yes | live slow-tool benchmark |
-| Release inference slots during tool wait | yes | live slow-tool benchmark |
-| Shared-prefix cache usage | backend-dependent | vLLM/SGLang live |
-| Streaming result delivery | yes | tests |
-| Dynamo `nvext.agent_hints` | yes | live smoke test |
-| KVFlow-style prefetch | hints only | not verified |
+| Optimization | Status | Verified |
+|---|---|---|
+| Multi-turn agent loop | implemented | tests |
+| Structured Pydantic output | implemented | tests |
+| Streaming result delivery | implemented | tests |
+| Tool coalescing | implemented | H100 research-summary benchmark |
+| Release inference slots during tool wait | implemented | H100 research-summary benchmark |
+| Shared-prefix cache usage | backend-dependent | H100 SGLang/vLLM/Dynamo |
+| OpenCode shared backend runtime | implemented | H100 OpenCode benchmark |
+| Dynamo `nvext.agent_hints` | implemented | live Dynamo smoke + benchmark |
+| KVFlow-style prefetch | hints only | not verified as a latency win |
 | TokenDance-style diff KV | prototype | mock only |
-| Distributed Redis orchestration | prototype | mock Redis only |
-
-Important distinction: tool deduplication is not KV-cache magic. In the N=100
-slow-tool benchmarks below, 100 agents intentionally use 10 repeated tool keys,
-so the maximum possible tool saving is 90 calls. That benchmark proves concurrent
-tool coalescing and scheduling behavior, not KVFlow prefetch.
-
-## Results
-
-All numbers below are from result JSON files committed under
-`tests/benchmarks/results/`.
-
-### Raw SGLang/Dynamo vs BatchAgent
-
-Workload: 100 two-turn agents, 2048-token shared system prompt, one simulated
-800ms tool wait per agent, 10 unique repeated tool queries, Qwen2.5-7B on one
-A10G.
-
-Source: `tests/benchmarks/results/backend_raw_vs_batchagent/`
-
-| Backend | Mode | Wall | Agents/s | TTFT P50/P95 | Tool calls |
-|---|---|---:|---:|---:|---:|
-| SGLang standalone | raw endpoint loop | 11.21s | 8.92 | 0.519s / 0.807s | 100/100 |
-| SGLang standalone | BatchAgent | 7.65s | 13.07 | 0.451s / 0.808s | 10/100 |
-| Dynamo + SGLang worker | raw endpoint loop | 11.15s | 8.97 | 0.506s / 0.794s | 100/100 |
-| Dynamo + SGLang worker | BatchAgent | 7.68s | 13.02 | 0.467s / 0.798s | 10/100 |
-| H100 SGLang, Qwen2.5-32B | raw endpoint loop | 9.06s | 11.04 | 0.552s / 1.099s | 100/100 |
-| H100 SGLang, Qwen2.5-32B | BatchAgent | 7.01s | 14.27 | 0.515s / 1.066s | 10/100 |
-
-Interpretation: raw SGLang/Dynamo is the right baseline for one-shot inference.
-BatchAgent wins on this multi-turn workload because duplicate tool calls are
-coalesced and inference concurrency is not held while tools are waiting.
-TTFT is measured from streaming SSE chunks. Cache-hit numbers are omitted from
-this table because SGLang's `/metrics` value was inconsistent after the second
-phase; the separate live probe below records the stable SGLang cache result.
-On the H100 32B run, BatchAgent was 2.05s faster than the raw loop, a 22.6%
-wall-clock reduction, with 90% tool-call deduplication and a 99.95% SGLang
-prefix cache hit rate after the BatchAgent phase.
-
-### vLLM Slow-Tool Benchmark
-
-Workload: same shape as above, vLLM 0.6.6.post1, Qwen2.5-7B, one A10G.
-
-Source: `tests/benchmarks/results/definitive_benchmark/results.json`
-
-| Mode | Wall | Agents/s | Tool calls | Prefix cache hit |
-|---|---:|---:|---:|---:|
-| Naive `asyncio.gather` | 13.07s | 7.65 | 100/100 | 98.68% |
-| BatchAgent | 9.65s | 10.36 | 10/100 | 98.95% |
-
-BatchAgent was 3.42s faster, a 26.2% wall-clock reduction, while preserving a
-high shared-prefix cache hit rate.
-
-### SGLang Live Probe
-
-Source: `tests/benchmarks/results/sglang_live/sglang_benchmark.json`
-
-| N | OK | Wall | Agents/s | Prefix cache hit |
-|---:|---:|---:|---:|---:|
-| 10 | 10/10 | 2.37s | 4.22 | 98.80% |
-| 50 | 50/50 | 2.99s | 16.75 | 98.81% |
-
-### Dynamo Live Probe
-
-Source: `tests/benchmarks/results/dynamo_live/dynamo_benchmark.json`
-
-| Request | Result | Wall |
-|---|---:|---:|
-| Unary with `nvext.agent_hints` | OK | 0.148s |
-| Streaming with `nvext.agent_hints` | OK | 0.142s |
-
-This verifies the adapter path against a live Dynamo frontend and SGLang worker.
-It is not a full Dynamo throughput benchmark.
+| Distributed Redis orchestration | prototype | local/mock only |
 
 ## Architecture
 
@@ -218,75 +218,63 @@ It is not a full Dynamo throughput benchmark.
 BatchAgent.run(...)
     |
     v
-TaskCompiler
-    - builds one job per input
-    - extracts shared prefix
+Task compiler
+    - creates one job per input
+    - separates shared prefix from per-agent input
     - injects output schema
     |
     v
-WaveScheduler
-    - runs inference turns with bounded concurrency
-    - releases the semaphore during TOOL_WAIT
-    - prioritizes near-complete agents
-    - emits KVFlow/Dynamo scheduling hints
+Wave scheduler
+    - runs model turns with bounded concurrency
+    - releases the inference slot during TOOL_WAIT
+    - streams completed results immediately
+    - emits backend hints where supported
     |
     v
-ToolPool
+Tool pool
     - coalesces concurrent identical calls
-    - caches deterministic tools
+    - caches deterministic calls
     - rate-limits external tools
     |
     v
-Backend adapter
-    - vLLM / SGLang / Dynamo / API backend
-    - parse tool calls
-    - collect metrics where available
+Backend/runtime
+    - SGLang / vLLM / Dynamo / API backend
+    - OpenCode subprocess runtime
+    - metrics collection
 ```
 
-The critical scheduling invariant is simple: the inference semaphore wraps model
-calls only. Tool waits do not occupy GPU request capacity.
+The key invariant: inference slots wrap model calls only. Tool waits do not hold
+GPU request capacity.
 
 ## Limitations
 
-- The strongest live numbers are for Qwen2.5-7B on a single A10G. 70B and
-  multi-node results are not done.
-- Tool coalescing only saves calls when multiple agents ask for the same
-  cacheable tool call at overlapping times.
-- KVFlow prefetch is not verified. The A/B/C measurement rerun showed no
-  prefetch-specific improvement from the current vLLM API-route approach.
-  Correct vLLM prefetch needs scheduler-integrated CPU->GPU block mappings.
-  Source: `tests/benchmarks/results/kvflow_measurement_integrity/results.json`.
-- TokenDance diff-KV is still a mock/prototype path. The synthetic compression
-  number is not a live vLLM result.
-- Distributed mode uses Redis abstractions but has not been validated as a real
-  multi-node 1,000-agent deployment.
-- API backends cannot expose the same KV/cache controls as self-hosted
-  inference engines.
+- KVFlow prefetch is not verified. The current vLLM API-route approach cannot
+  safely turn BatchAgent `kv_key` hints into CPU->GPU block mappings; that needs
+  scheduler-level integration.
+- TokenDance-style diff KV is a prototype. The compression number is synthetic,
+  not a live vLLM `CacheEngine` result.
+- Distributed Redis orchestration exists as a prototype but is not yet validated
+  as a 1,000-agent, multi-node deployment.
+- API backends cannot expose the same cache/scheduler controls as self-hosted
+  vLLM, SGLang, or Dynamo.
+- Tool coalescing only helps when agents request the same cacheable tool call
+  during overlapping windows.
 
 ## Research Context
 
-BatchAgent is motivated by the systems gap between orchestration and inference:
-orchestrators do not manage KV/cache efficiency, and inference engines do not
-understand multi-agent workflow structure.
+BatchAgent is motivated by the gap between agent orchestration and inference
+serving:
 
-Relevant systems:
-
-- vLLM: continuous batching, PagedAttention, automatic prefix caching.
-- SGLang: RadixAttention for token-level prefix reuse.
-- NVIDIA Dynamo: production inference serving with request extensions such as
-  `nvext.agent_hints`.
-- LMCache: hierarchical KV cache movement across GPU, CPU, disk, and remote
+- vLLM provides continuous batching, PagedAttention, and prefix caching.
+- SGLang provides RadixAttention, which is well suited to shared-prefix and
+  branching-context workloads.
+- NVIDIA Dynamo exposes production serving hooks such as `nvext.agent_hints`.
+- LMCache targets hierarchical KV movement across GPU, CPU, disk, and remote
   storage.
+- TokenDance and KVFlow show the systems opportunity for multi-agent KV sharing
+  and workflow-aware cache movement.
 
-Related orchestration and API baselines:
-
-- Agent Orchestrator: parallel coding agents in isolated workspaces.
-- Sculptor and amux: local supervision UIs/TUIs for parallel coding agents.
-- OpenAI Batch API: asynchronous batch processing for offline request batches;
-  useful for bulk completions, but not a substitute for low-latency multi-turn
-  tool-using agents.
-
-Relevant papers and docs:
+References:
 
 - TokenDance: `https://arxiv.org/abs/2604.03143`
 - KVFlow: `https://arxiv.org/abs/2507.07400`
@@ -303,25 +291,26 @@ Run tests:
 pytest -q
 ```
 
-Run the raw-backend vs BatchAgent benchmark:
+Run the H100 research-summary benchmark:
+
+```bash
+PYTHONPATH=. python tests/benchmarks/bench_research_summary.py \
+  --base-url http://localhost:30000 \
+  --backend sglang://localhost:30000 \
+  --label sglang_qwen25_32b_h100 \
+  --max-inflight 8 \
+  --tool-latency 400 \
+  --system-prompt-tokens 2048
+```
+
+Run the raw-backend vs BatchAgent slow-tool benchmark:
 
 ```bash
 PYTHONPATH=. python tests/benchmarks/backend_raw_vs_batchagent.py \
-  --base-url http://127.0.0.1:30000 \
-  --label sglang_standalone \
+  --base-url http://localhost:30000 \
+  --label sglang_h100 \
   --n 100 \
   --tool-latency 800 \
   --system-prompt-tokens 2048 \
   --max-inflight 32
-```
-
-Run the vLLM definitive benchmark:
-
-```bash
-PYTHONPATH=. python tests/benchmarks/definitive_benchmark.py \
-  --backend vllm://localhost:8000 \
-  --n 100 \
-  --slow-tools \
-  --tool-latency 800 \
-  --system-prompt-tokens 2048
 ```

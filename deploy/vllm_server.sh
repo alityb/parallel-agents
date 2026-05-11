@@ -8,13 +8,13 @@ set -euo pipefail
 #   MODEL_ID                 Hugging Face model id (default: meta-llama/Llama-3.1-70B-Instruct)
 #   PORT                     Server port (default: 8000)
 #   GPU_MEMORY_UTILIZATION   vLLM GPU memory fraction (default: 0.85)
-#   BATCH_AGENT_REPO         Path to this repo inside the container (default: /workspace/parallel-agents)
+#   BATCH_AGENT_REPO         Path to this repo inside the container (default: /workspace/batchagent)
 #   VLLM_VERSION             vLLM version (default: 0.6.6)
 
 MODEL_ID="${MODEL_ID:-meta-llama/Llama-3.1-70B-Instruct}"
 PORT="${PORT:-8000}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.85}"
-BATCH_AGENT_REPO="${BATCH_AGENT_REPO:-/workspace/parallel-agents}"
+BATCH_AGENT_REPO="${BATCH_AGENT_REPO:-/workspace/batchagent}"
 VLLM_VERSION="${VLLM_VERSION:-0.6.6}"
 
 python3 -m pip install --upgrade pip

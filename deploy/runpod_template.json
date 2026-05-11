@@ -29,9 +29,9 @@
     },
     {
       "key": "BATCH_AGENT_REPO",
-      "value": "/workspace/parallel-agents"
+      "value": "/workspace/batchagent"
     }
   ],
-  "startScript": "set -euo pipefail; if [ ! -d /workspace/parallel-agents ]; then git clone https://github.com/alityb/parallel-agents.git /workspace/parallel-agents; fi; bash /workspace/parallel-agents/deploy/vllm_server.sh",
+  "startScript": "set -euo pipefail; if [ ! -d /workspace/batchagent ]; then git clone https://github.com/alityb/batchagent.git /workspace/batchagent; fi; bash /workspace/batchagent/deploy/vllm_server.sh",
   "readme": "Starts vLLM on one A100 80GB with prefix caching enabled and Batch Agent patch helpers importable. Exposes OpenAI-compatible API on port 8000."
 }

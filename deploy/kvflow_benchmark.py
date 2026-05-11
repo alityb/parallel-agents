@@ -20,7 +20,7 @@ import asyncio, json, math, sys, time
 from pathlib import Path
 import httpx
 
-sys.path.insert(0, "/home/ubuntu/parallel-agents")
+sys.path.insert(0, "/home/ubuntu/batchagent")
 from batch_agent.backends.vllm import VLLMBackend
 from batch_agent.compiler import TaskCompiler
 from batch_agent.scheduler import WaveScheduler

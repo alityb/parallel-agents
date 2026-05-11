@@ -1,0 +1,72 @@
+{
+  "base_url": "http://localhost:8001",
+  "batchagent": {
+    "backend_request_latency_p50": 0.679256595998595,
+    "backend_request_latency_p95": 0.9691410080013156,
+    "backend_requests": 201,
+    "failed": 0,
+    "failure_samples": [],
+    "mode": "batchagent",
+    "ok": 100,
+    "throughput_agents_per_sec": 16.91101050341451,
+    "tool_calls_executed": 10,
+    "tool_calls_requested": 100,
+    "ttft_p50": 0.34552208999957656,
+    "ttft_p95": 0.5904105150002579,
+    "ttft_p99": 0.6209971049975138,
+    "ttft_samples": 201,
+    "usage": {
+      "completion_tokens": 1601,
+      "prompt_tokens": 433549,
+      "total_tokens": 435150
+    },
+    "wall_clock_seconds": 5.913307189999614
+  },
+  "benchmark": "backend_raw_vs_batchagent",
+  "deltas": {
+    "tool_calls_saved_by_batchagent": 90,
+    "total_tokens_batchagent_minus_raw": 22030,
+    "wall_clock_seconds_batchagent_minus_raw": -4.589808782999171
+  },
+  "label": "dynamo_qwen25_32b_h100",
+  "max_inflight": 32,
+  "metrics_after_batchagent": {
+    "gpu_utilization": null,
+    "prefix_cache_hit_rate": null
+  },
+  "metrics_after_raw": {
+    "gpu_utilization": null,
+    "prefix_cache_hit_rate": null
+  },
+  "metrics_before": {
+    "gpu_utilization": null,
+    "prefix_cache_hit_rate": null
+  },
+  "model": "Qwen/Qwen2.5-32B-Instruct",
+  "n": 100,
+  "raw_endpoint_loop": {
+    "backend_request_latency_p50": 0.7598481530003482,
+    "backend_request_latency_p95": 1.8533128909984953,
+    "backend_requests": 200,
+    "failed": 0,
+    "failure_samples": [],
+    "mode": "raw_endpoint_loop",
+    "ok": 100,
+    "throughput_agents_per_sec": 9.520984082921501,
+    "tool_calls_executed": 100,
+    "tool_calls_requested": 100,
+    "ttft_p50": 0.4537792000010086,
+    "ttft_p95": 1.5507672669991734,
+    "ttft_p99": 1.6770276950010157,
+    "ttft_samples": 200,
+    "usage": {
+      "completion_tokens": 1600,
+      "prompt_tokens": 411520,
+      "total_tokens": 413120
+    },
+    "wall_clock_seconds": 10.503115972998785
+  },
+  "system_prompt_tokens_target": 2048,
+  "timestamp": 1778464027.3013835,
+  "tool_latency_ms": 800.0
+}

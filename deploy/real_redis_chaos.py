@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio, json, sys, time
 from pathlib import Path
 
-sys.path.insert(0, "/home/ubuntu/parallel-agents")
+sys.path.insert(0, "/home/ubuntu/batchagent")
 
 OUT = Path("/tmp/session_results"); OUT.mkdir(exist_ok=True)
 

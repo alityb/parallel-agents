@@ -283,7 +283,7 @@ async def run_batchagent(
 
     original_scheduler = BatchAgent._scheduler
 
-    def scheduler_with_live_backend(spec: Any) -> Any:
+    def scheduler_with_live_backend(spec: Any, _backend: Any = None) -> Any:
         from batch_agent.compiler import TaskCompiler
         from batch_agent.scheduler import WaveScheduler
 

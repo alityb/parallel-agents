@@ -18,8 +18,10 @@ from typing import Any, Iterable
 
 try:  # pragma: no cover - vLLM is not installed in CI
     from vllm.worker.cache_engine import CacheEngine as _VLLMCacheEngine
+    _VLLM_AVAILABLE = True
 except Exception:  # pragma: no cover
     _VLLMCacheEngine = object
+    _VLLM_AVAILABLE = False
 
 
 @dataclass(frozen=True)
@@ -69,6 +71,11 @@ class DiffCacheEngine(_VLLMCacheEngine):
     v0 behavior: records block hashes, deduplicates shared blocks globally, and
     stores per-agent sparse diffs as references to already-known blocks plus the
     unique blocks for that agent.
+
+    In production use inside a live vLLM worker, instantiate via
+    ``VLLMDiffCacheEngine`` (below) which passes the required hardware config
+    objects to the real ``CacheEngine.__init__()``.  In unit tests this class
+    is used standalone with no vLLM hardware state.
     """
 
     def __init__(
@@ -78,7 +85,11 @@ class DiffCacheEngine(_VLLMCacheEngine):
         block_size_tokens: int | None = None,
         **kwargs: Any,
     ) -> None:
-        if _VLLMCacheEngine is not object:
+        # Only call the vLLM CacheEngine constructor when vLLM is NOT installed
+        # (base is object).  When vLLM IS installed the real CacheEngine
+        # requires hardware config objects; callers that need live GPU kernel
+        # support must use VLLMDiffCacheEngine and supply those configs.
+        if not _VLLM_AVAILABLE:
             super().__init__(*args, **kwargs)  # type: ignore[misc]
         if block_size_tokens is not None:
             block_size = block_size_tokens
@@ -151,6 +162,22 @@ class DiffCacheEngine(_VLLMCacheEngine):
             compression_ratio=ratio,
             agents_encoded=len(self.agent_diffs),
         )
+
+
+if _VLLM_AVAILABLE:  # pragma: no cover
+    class VLLMDiffCacheEngine(_VLLMCacheEngine, DiffCacheEngine):  # type: ignore[misc]
+        """Production subclass that combines the real vLLM CacheEngine (GPU
+        kernels, tensor allocation) with the diff-encoding logic above.
+
+        Use this inside a live vLLM worker where the hardware config objects
+        (cache_config, model_config, parallel_config, device_config) are
+        available.  ``DiffCacheEngine`` alone is sufficient for unit tests and
+        orchestration-layer use.
+        """
+
+        def __init__(self, *args: Any, block_size: int = 16, **kwargs: Any) -> None:
+            _VLLMCacheEngine.__init__(self, *args, **kwargs)
+            DiffCacheEngine.__init__(self, block_size=block_size)
 
 
 def maybe_create_diff_cache_engine(diff_kv: bool, **kwargs: Any) -> DiffCacheEngine | None:

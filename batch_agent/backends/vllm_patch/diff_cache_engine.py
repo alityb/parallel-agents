@@ -65,7 +65,7 @@ class BlockHasher:
         return [self.hash_block(block) for block in self.split_blocks(tokens)]
 
 
-class DiffCacheEngine(_VLLMCacheEngine):
+class DiffCacheEngine:
     """Block-hashing diff cache encoder.
 
     v0 behavior: records block hashes, deduplicates shared blocks globally, and
@@ -85,12 +85,11 @@ class DiffCacheEngine(_VLLMCacheEngine):
         block_size_tokens: int | None = None,
         **kwargs: Any,
     ) -> None:
-        # Only call the vLLM CacheEngine constructor when vLLM is NOT installed
-        # (base is object).  When vLLM IS installed the real CacheEngine
-        # requires hardware config objects; callers that need live GPU kernel
-        # support must use VLLMDiffCacheEngine and supply those configs.
-        if not _VLLM_AVAILABLE:
-            super().__init__(*args, **kwargs)  # type: ignore[misc]
+        # Standalone class — no vLLM constructor to call.
+        # For production use inside a live vLLM worker, compose this class
+        # with vLLM's CacheEngine rather than subclassing, since CacheEngine
+        # requires hardware config objects (cache_config, model_config, etc.)
+        # that are only available inside a running vLLM worker process.
         if block_size_tokens is not None:
             block_size = block_size_tokens
         self.block_size = block_size
@@ -162,22 +161,6 @@ class DiffCacheEngine(_VLLMCacheEngine):
             compression_ratio=ratio,
             agents_encoded=len(self.agent_diffs),
         )
-
-
-if _VLLM_AVAILABLE:  # pragma: no cover
-    class VLLMDiffCacheEngine(_VLLMCacheEngine, DiffCacheEngine):  # type: ignore[misc]
-        """Production subclass that combines the real vLLM CacheEngine (GPU
-        kernels, tensor allocation) with the diff-encoding logic above.
-
-        Use this inside a live vLLM worker where the hardware config objects
-        (cache_config, model_config, parallel_config, device_config) are
-        available.  ``DiffCacheEngine`` alone is sufficient for unit tests and
-        orchestration-layer use.
-        """
-
-        def __init__(self, *args: Any, block_size: int = 16, **kwargs: Any) -> None:
-            _VLLMCacheEngine.__init__(self, *args, **kwargs)
-            DiffCacheEngine.__init__(self, block_size=block_size)
 
 
 def maybe_create_diff_cache_engine(diff_kv: bool, **kwargs: Any) -> DiffCacheEngine | None:

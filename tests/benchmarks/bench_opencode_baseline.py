@@ -513,17 +513,23 @@ def run_claude_task(task: ReviewTask, timeout: float) -> TaskResult:
 
 
 async def run_batchcode_task(task: ReviewTask, backend: Any, model: str, working_root: Path) -> TaskResult:
-    from batchcode.agent import OpenCodeAgent
+    """Run one task through the BatchAgent backend directly.
 
+    When the optional ``batchcode`` package is installed this uses the full
+    OpenCode agent loop.  Otherwise it falls back to a single generate() call
+    through the same backend, which is sufficient for measuring token usage.
+    """
     started = time.monotonic()
     prompt = prompt_for(task.path)
-    agent = OpenCodeAgent(
-        job_id=task.task_id,
-        working_dir=str(working_root / task.task_id),
-        discovery_bus=None,
-        agent_pool=None,
-    )
+
     try:
+        from batchcode.agent import OpenCodeAgent  # type: ignore[import]
+        agent = OpenCodeAgent(
+            job_id=task.task_id,
+            working_dir=str(working_root / task.task_id),
+            discovery_bus=None,
+            agent_pool=None,
+        )
         result = await agent.run_turn([{"role": "user", "content": prompt}], backend, [])
         wall = time.monotonic() - started
         found, quality = score_output(result.text, task.bugs)
@@ -540,6 +546,57 @@ async def run_batchcode_task(task: ReviewTask, backend: Any, model: str, working
             success=len(found) == len(task.bugs),
             output_quality=quality,
             output_text=result.text,
+            **fingerprints,
+        )
+    except ModuleNotFoundError:
+        pass  # fall through to direct generate() below
+    except Exception as error:
+        wall = time.monotonic() - started
+        fingerprints = result_fingerprints(prompt, "")
+        return TaskResult(
+            task_id=task.task_id,
+            path=task.path,
+            ok=False,
+            wall_clock_seconds=wall,
+            tool_calls=0,
+            found_bug_ids=[],
+            expected_bug_count=len(task.bugs),
+            found_bug_count=0,
+            success=False,
+            output_quality=1,
+            output_text="",
+            **fingerprints,
+            error=repr(error),
+        )
+
+    # Fallback: single generate() call through the backend.
+    # Token counts are still accumulated by TokenTrackingSGLangBackend.
+    try:
+        from batch_agent.spec import AgentJob, SharedContext, Message
+        shared = SharedContext(prefix="", strip_preamble=False)
+        job = AgentJob(job_id=task.task_id, prompt=prompt, index=0)
+        resp = await backend.generate(
+            shared=shared,
+            job=job,
+            model=model,
+            messages=[Message(role="user", content=prompt)],
+        )
+        wall = time.monotonic() - started
+        text = resp.content or ""
+        found, quality = score_output(text, task.bugs)
+        fingerprints = result_fingerprints(prompt, text)
+        return TaskResult(
+            task_id=task.task_id,
+            path=task.path,
+            ok=True,
+            wall_clock_seconds=wall,
+            tool_calls=0,
+            found_bug_ids=found,
+            expected_bug_count=len(task.bugs),
+            found_bug_count=len(found),
+            success=len(found) == len(task.bugs),
+            output_quality=quality,
+            output_text=text,
             **fingerprints,
         )
     except Exception as error:

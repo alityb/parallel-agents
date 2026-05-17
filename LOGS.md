@@ -2,6 +2,33 @@ Record all changes with time and date here. Design choices, mistakes, bugs, etc.
 
 ## 2026-05-17
 
+### Hydragen-style shared prefix benchmark — 2026-05-17
+
+Hardware: A10G 23GB, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1.
+Workload: N parallel requests each with a shared ~2048-token system prompt + unique ~500-token per-task code review prompt. TTFT measured via streaming SSE to first content token.
+
+Condition A: vLLM launched WITHOUT `--enable-prefix-caching`.
+Condition B: vLLM launched WITH `--enable-prefix-caching`.
+
+Result files:
+- `tests/benchmarks/results/prefix_cache_benchmark/with_cache.json`
+- `tests/benchmarks/results/prefix_cache_benchmark/without_cache.json`
+- `tests/benchmarks/results/prefix_cache_benchmark/results.json` (combined)
+
+| N | TTFT P50 (no cache) | TTFT P50 (cache) | TTFT speedup | Wall (no cache) | Wall (cache) | Wall speedup | Cache hit rate |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 5 | 1.110s | 0.153s | 7.3x | 4.44s | 2.00s | 2.2x | 84.0% |
+| 10 | 2.730s | 0.147s | 18.5x | 9.87s | 4.55s | 2.2x | 86.3% |
+| 20 | 5.436s | 0.149s | 36.5x | 15.39s | 4.66s | 3.3x | 89.4% |
+| 50 | 13.551s | 0.308s | 43.9x | 33.23s | 5.29s | 6.3x | 93.3% |
+| 100 | 28.907s | 0.469s | 61.7x | 63.74s | 6.50s | 9.8x | 96.1% |
+
+Key finding: without prefix caching, TTFT P50 grows linearly with N (each request must prefill the full 2047-token system prompt from scratch, backing up the prefill queue). With prefix caching, TTFT stays nearly flat at ~0.15s up to N=20 and only grows modestly to 0.47s at N=100 because only the per-task unique tokens (~500) are actually prefilled after the first request warms the cache.
+
+This is the direct empirical demonstration of the "shared prefix is gold" claim in AGENTS.md. The result matches the mechanism described in the Hydragen paper (arXiv:2402.05099): without shared prefix attention, prefill compute grows as O(N × L_system) and queuing dominates TTFT; with prefix caching, it degrades to O(L_system + N × L_task).
+
+Note: `cached_tokens` remains 0 in all results because vLLM's streaming API does not expose the cached token count in `usage`. The cache hit rates (84%–96%) come from vLLM's Prometheus `/metrics` endpoint (`vllm:gpu_prefix_cache_hit_rate`).
+
 ### Measured token counts in bench_opencode_baseline — 2026-05-17
 
 - Added `prompt_tokens`, `cached_tokens`, `completion_tokens` to `TaskResult` dataclass.

@@ -1,6 +1,54 @@
 Record all changes with time and date here. Design choices, mistakes, bugs, etc. inclusive.
 
-## 2026-05-11
+## 2026-05-17
+
+### Measured token counts in bench_opencode_baseline — 2026-05-17
+
+- Added `prompt_tokens`, `cached_tokens`, `completion_tokens` to `TaskResult` dataclass.
+- `run_sglang_task` and `run_openai_task` now extract `usage.prompt_tokens` and `usage.cached_tokens` (guarded against `prompt_tokens_details: null` from vLLM) from the HTTP response.
+- `run_batchcode` now uses a `TokenTrackingSGLangBackend` inner class that intercepts every `generate()` call and accumulates token totals via an asyncio lock.
+- `run_batchcode_task` now has a graceful fallback when `batchcode` module is not installed: calls `backend.generate()` directly with a single user message, which is enough to measure tokens and benchmark wall-clock.
+- `aggregate()` now reports `total_prompt_tokens`, `total_cached_tokens`, `total_completion_tokens`, `actual_prefill_tokens`, `per_agent_prompt_tokens`, `per_agent_actual_prefill`.
+- Comparison section now reports `prefill_tokens_sequential`, `prefill_tokens_batchagent`, and `prefill_reduction_pct`.
+- Bug fixed: `DiffCacheEngine` was inheriting from vLLM's `CacheEngine` which requires hardware config objects (cache_config, model_config, etc.) when vLLM is installed. Changed to a standalone class; MRO conflict removed. All 151 remote tests pass.
+
+**Live run — A10G, Qwen/Qwen2.5-7B-Instruct, vLLM 0.6.6.post1 on port 8080, N=20 tasks, max_inflight=10:**
+
+Result file: `tests/benchmarks/results/opencode_baseline/results_token_measured_n20.json`
+
+| Condition | total_prompt_tokens | cached_tokens | actual_prefill | per_agent | wall_clock |
+|---|---:|---:|---:|---:|---:|
+| Sequential (sglang) | 11,114 | 0 | 11,114 | 555.7 | 251.0s |
+| BatchAgent parallel | 11,114 | 0 | 11,114 | 555.7 | 28.7s |
+
+- Speedup: **8.75x** wall-clock.
+- Prefill reduction: **0%** — identical token counts both ways.
+- `cached_tokens: 0` in both cases because vLLM's `usage` field does not return cached token breakdown for this version and config (no `cached_tokens` key in the response, `prompt_tokens_details` is null).
+
+**Why prefill_reduction = 0% here vs the 96% in the README:**
+
+The benchmark tasks have no shared system prompt. Each request is the per-task code review prompt only (~556 tokens). The README's 96% calculation was based on OpenCode CLI sessions where a ~12,369-token system prompt is included in every request. Without a large shared prefix, there is no prefix-cache saving to measure. The 8.75x wall-clock speedup here comes entirely from parallelism — running 20 requests concurrently instead of sequentially.
+
+To reproduce the README's prefill savings, run with `--mode sglang-vs-batchcode` against an SGLang server using a real OpenCode system prompt (e.g. via `--mode claude` with the CLI), or add a large `system_prompt` argument to the benchmark so both conditions share a common prefix.
+
+
+
+### OpenCode output-equivalence audit — 2026-05-11
+
+- Added explicit output auditing to `tests/benchmarks/bench_opencode_baseline.py`.
+- Each task result now records `prompt_sha256`, `output_sha256`, and `normalized_output_sha256`.
+- Sequential-vs-shared comparisons now include `comparison.output_equivalence` with per-task rows and aggregate rates:
+  - `prompt_hash_match_rate`
+  - `finding_set_match_rate`
+  - `success_match_rate`
+  - `exact_output_match_rate`
+  - `normalized_output_match_rate`
+  - `task_equivalent`
+  - `byte_identical`
+- For code review, task-equivalent output means both modes found the same set of expected bug IDs per task. Byte-identical text is recorded separately and is not required.
+- Existing pre-audit OpenCode H100 timing/prefill rows prove same workload/model and lower prefill compute, but should not be described as "same output" unless rerun JSON reports `comparison.output_equivalence.task_equivalent=true`.
+- Retrospective audit of the existing local `tests/benchmarks/results/opencode_baseline/results_20_sglang_seq_vs_batchcode.json`: `tasks_compared=20`, `finding_set_match_rate=0.55`, `success_match_rate=0.95`, `exact_output_match_rate=0.0`, `task_equivalent=false`. This confirms the old artifact does not support a "same output" claim.
+- Updated `README.md` to remove the unconditional "Same output" wording and document the audit criterion.
 
 ### PyPI 0.2.0 release — 2026-05-11
 

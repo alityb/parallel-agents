@@ -358,9 +358,12 @@ async def run_n(
         "failed": n - len(ok_results),
         "wall_clock_seconds": round(wall_clock, 3),
         "throughput_agents_per_sec": round(n / wall_clock, 3),
+        "ttft_p10": round(percentile(ttfts, 10), 4),
         "ttft_p50": round(percentile(ttfts, 50), 4),
         "ttft_p95": round(percentile(ttfts, 95), 4),
         "ttft_p99": round(percentile(ttfts, 99), 4),
+        # All per-request TTFT values sorted ascending — allows full distribution inspection
+        "ttft_all_sorted": [round(t, 4) for t in sorted(ttfts)],
         "total_prompt_tokens": total_prompt,
         "total_cached_tokens": total_cached,
         "total_completion_tokens": total_completion,
@@ -510,10 +513,9 @@ async def main() -> None:
             results_for_condition.append(result)
             print(
                 f"wall={result['wall_clock_seconds']:.2f}s  "
-                f"TTFT P50={result['ttft_p50']:.3f}s  "
+                f"TTFT P10={result['ttft_p10']:.3f}s  "
+                f"P50={result['ttft_p50']:.3f}s  "
                 f"P95={result['ttft_p95']:.3f}s  "
-                f"prefill={result['actual_prefill_tokens']:,}  "
-                f"cached={result['total_cached_tokens']:,}  "
                 f"cache_hit={result['prefix_cache_hit_rate_after']}"
             )
 
@@ -527,16 +529,14 @@ async def main() -> None:
     # Print comparison table if both conditions ran
     if "with_cache" in payload and "without_cache" in payload:
         print("\n=== Comparison: with-cache vs without-cache ===")
-        print(f"{'N':>6} | {'TTFT P50 (no cache)':>20} | {'TTFT P50 (cache)':>17} | {'Speedup':>8} | {'Prefill saved':>14}")
-        print("-" * 75)
+        print(f"{'N':>6} | {'P10 no-cache':>13} | {'P10 cache':>10} | {'P50 no-cache':>13} | {'P50 cache':>10} | {'P50 speedup':>12}")
+        print("-" * 80)
         for wc, nc in zip(payload["with_cache"], payload["without_cache"]):
             n = wc["n"]
-            p50_nc = nc["ttft_p50"]
-            p50_wc = wc["ttft_p50"]
-            speedup = p50_nc / p50_wc if p50_wc else 0
-            saved = nc["actual_prefill_tokens"] - wc["actual_prefill_tokens"]
             print(
-                f"{n:>6} | {p50_nc:>20.3f} | {p50_wc:>17.3f} | {speedup:>7.2f}x | {saved:>14,}"
+                f"{n:>6} | {nc['ttft_p10']:>12.3f}s | {wc['ttft_p10']:>9.3f}s"
+                f" | {nc['ttft_p50']:>12.3f}s | {wc['ttft_p50']:>9.3f}s"
+                f" | {nc['ttft_p50']/wc['ttft_p50']:>11.1f}x"
             )
 
 

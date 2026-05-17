@@ -680,7 +680,7 @@ async def run_batchcode(tasks: list[ReviewTask], backend_url: str, model: str, m
                 usage = resp.raw.get("usage") or {}
                 cached = (
                     usage.get("cached_tokens")
-                    or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                    or (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
                     or 0
                 )
                 async with self._lock:

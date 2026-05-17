@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import random
@@ -56,7 +57,14 @@ class TaskResult:
     success: bool
     output_quality: int
     output_text: str
+    prompt_sha256: str = ""
+    output_sha256: str = ""
+    normalized_output_sha256: str = ""
     error: str = ""
+    # Token usage — populated from API usage fields when available
+    prompt_tokens: int = 0
+    cached_tokens: int = 0
+    completion_tokens: int = 0
 
 
 def bug_functions() -> dict[str, list[str]]:
@@ -220,6 +228,22 @@ def prompt_for(path: str) -> str:
     )
 
 
+def sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def normalize_output_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().lower())
+
+
+def result_fingerprints(prompt: str, output: str) -> dict[str, str]:
+    return {
+        "prompt_sha256": sha256_text(prompt),
+        "output_sha256": sha256_text(output),
+        "normalized_output_sha256": sha256_text(normalize_output_text(output)),
+    }
+
+
 async def discover_openai_model(base_url: str, api_key: str) -> str:
     preferred = os.environ.get("OPENAI_MODEL")
     if preferred:
@@ -239,6 +263,7 @@ async def discover_openai_model(base_url: str, api_key: str) -> str:
 
 async def run_openai_task(task: ReviewTask, base_url: str, api_key: str, model: str, timeout: float, max_tokens: int) -> TaskResult:
     started = time.monotonic()
+    prompt = prompt_for(task.path)
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
@@ -246,7 +271,7 @@ async def run_openai_task(task: ReviewTask, base_url: str, api_key: str, model: 
                 headers={"authorization": f"Bearer {api_key}", "content-type": "application/json"},
                 json={
                     "model": model,
-                    "messages": [{"role": "user", "content": prompt_for(task.path)}],
+                    "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0,
                     "max_tokens": max_tokens,
                 },
@@ -257,6 +282,13 @@ async def run_openai_task(task: ReviewTask, base_url: str, api_key: str, model: 
         message = payload.get("choices", [{}])[0].get("message", {})
         text = message.get("content") or json.dumps(payload)
         found, quality = score_output(text, task.bugs)
+        fingerprints = result_fingerprints(prompt, text)
+        usage = payload.get("usage") or {}
+        cached = (
+            usage.get("cached_tokens")
+            or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+            or 0
+        )
         return TaskResult(
             task_id=task.task_id,
             path=task.path,
@@ -269,9 +301,14 @@ async def run_openai_task(task: ReviewTask, base_url: str, api_key: str, model: 
             success=len(found) == len(task.bugs),
             output_quality=quality,
             output_text=text,
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            cached_tokens=cached,
+            completion_tokens=usage.get("completion_tokens", 0),
+            **fingerprints,
         )
     except Exception as error:
         wall = time.monotonic() - started
+        fingerprints = result_fingerprints(prompt, "")
         return TaskResult(
             task_id=task.task_id,
             path=task.path,
@@ -284,6 +321,7 @@ async def run_openai_task(task: ReviewTask, base_url: str, api_key: str, model: 
             success=False,
             output_quality=1,
             output_text="",
+            **fingerprints,
             error=repr(error),
         )
 
@@ -302,6 +340,7 @@ async def run_openai_sequential(tasks: list[ReviewTask], base_url: str, model: s
 
 async def run_sglang_task(task: ReviewTask, base_url: str, model: str, timeout: float, max_tokens: int) -> TaskResult:
     started = time.monotonic()
+    prompt = prompt_for(task.path)
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
@@ -309,7 +348,7 @@ async def run_sglang_task(task: ReviewTask, base_url: str, model: str, timeout: 
                 headers={"content-type": "application/json"},
                 json={
                     "model": model,
-                    "messages": [{"role": "user", "content": prompt_for(task.path)}],
+                    "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0,
                     "max_tokens": max_tokens,
                 },
@@ -320,6 +359,14 @@ async def run_sglang_task(task: ReviewTask, base_url: str, model: str, timeout: 
         message = payload.get("choices", [{}])[0].get("message", {})
         text = message.get("content") or json.dumps(payload)
         found, quality = score_output(text, task.bugs)
+        fingerprints = result_fingerprints(prompt, text)
+        usage = payload.get("usage") or {}
+        # SGLang may report cached tokens under different keys
+        cached = (
+            usage.get("cached_tokens")
+            or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+            or 0
+        )
         return TaskResult(
             task_id=task.task_id,
             path=task.path,
@@ -332,9 +379,14 @@ async def run_sglang_task(task: ReviewTask, base_url: str, model: str, timeout: 
             success=len(found) == len(task.bugs),
             output_quality=quality,
             output_text=text,
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            cached_tokens=cached,
+            completion_tokens=usage.get("completion_tokens", 0),
+            **fingerprints,
         )
     except Exception as error:
         wall = time.monotonic() - started
+        fingerprints = result_fingerprints(prompt, "")
         return TaskResult(
             task_id=task.task_id,
             path=task.path,
@@ -347,6 +399,7 @@ async def run_sglang_task(task: ReviewTask, base_url: str, model: str, timeout: 
             success=False,
             output_quality=1,
             output_text="",
+            **fingerprints,
             error=repr(error),
         )
 
@@ -421,6 +474,7 @@ def score_output(text: str, bugs: list[ExpectedBug]) -> tuple[list[str], int]:
 
 def run_claude_task(task: ReviewTask, timeout: float) -> TaskResult:
     started = time.monotonic()
+    prompt = prompt_for(task.path)
     proc = subprocess.run(
         [
             "claude",
@@ -428,7 +482,7 @@ def run_claude_task(task: ReviewTask, timeout: float) -> TaskResult:
             "--dangerously-skip-permissions",
             "--output-format",
             "json",
-            prompt_for(task.path),
+            prompt,
         ],
         capture_output=True,
         text=True,
@@ -440,6 +494,7 @@ def run_claude_task(task: ReviewTask, timeout: float) -> TaskResult:
     if proc.returncode:
         text = text or proc.stdout or error
     found, quality = score_output(text, task.bugs)
+    fingerprints = result_fingerprints(prompt, text)
     return TaskResult(
         task_id=task.task_id,
         path=task.path,
@@ -452,6 +507,7 @@ def run_claude_task(task: ReviewTask, timeout: float) -> TaskResult:
         success=len(found) == len(task.bugs),
         output_quality=quality if proc.returncode == 0 else 1,
         output_text=text,
+        **fingerprints,
         error=error,
     )
 
@@ -460,6 +516,7 @@ async def run_batchcode_task(task: ReviewTask, backend: Any, model: str, working
     from batchcode.agent import OpenCodeAgent
 
     started = time.monotonic()
+    prompt = prompt_for(task.path)
     agent = OpenCodeAgent(
         job_id=task.task_id,
         working_dir=str(working_root / task.task_id),
@@ -467,9 +524,10 @@ async def run_batchcode_task(task: ReviewTask, backend: Any, model: str, working
         agent_pool=None,
     )
     try:
-        result = await agent.run_turn([{"role": "user", "content": prompt_for(task.path)}], backend, [])
+        result = await agent.run_turn([{"role": "user", "content": prompt}], backend, [])
         wall = time.monotonic() - started
         found, quality = score_output(result.text, task.bugs)
+        fingerprints = result_fingerprints(prompt, result.text)
         return TaskResult(
             task_id=task.task_id,
             path=task.path,
@@ -482,9 +540,11 @@ async def run_batchcode_task(task: ReviewTask, backend: Any, model: str, working
             success=len(found) == len(task.bugs),
             output_quality=quality,
             output_text=result.text,
+            **fingerprints,
         )
     except Exception as error:
         wall = time.monotonic() - started
+        fingerprints = result_fingerprints(prompt, "")
         return TaskResult(
             task_id=task.task_id,
             path=task.path,
@@ -497,14 +557,33 @@ async def run_batchcode_task(task: ReviewTask, backend: Any, model: str, working
             success=False,
             output_quality=1,
             output_text="",
+            **fingerprints,
             error=repr(error),
         )
 
 
-async def run_batchcode(tasks: list[ReviewTask], backend_url: str, model: str, max_inflight: int, working_root: Path, max_tokens: int) -> tuple[list[TaskResult], float]:
+async def run_batchcode(tasks: list[ReviewTask], backend_url: str, model: str, max_inflight: int, working_root: Path, max_tokens: int) -> tuple[list[TaskResult], float, dict[str, int]]:
     from batch_agent.backends.sglang import SGLangBackend
 
-    class LimitedSGLangBackend(SGLangBackend):
+    class TokenTrackingSGLangBackend(SGLangBackend):
+        """SGLang backend that accumulates token usage across all generate() calls."""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self._total_prompt_tokens: int = 0
+            self._total_cached_tokens: int = 0
+            self._total_completion_tokens: int = 0
+            self._lock = asyncio.Lock()
+
+        @property
+        def usage_totals(self) -> dict[str, int]:
+            return {
+                "prompt_tokens": self._total_prompt_tokens,
+                "cached_tokens": self._total_cached_tokens,
+                "completion_tokens": self._total_completion_tokens,
+                "actual_prefill_tokens": self._total_prompt_tokens - self._total_cached_tokens,
+            }
+
         async def generate(
             self,
             *,
@@ -521,7 +600,7 @@ async def run_batchcode(tasks: list[ReviewTask], backend_url: str, model: str, m
             extensions.setdefault("max_tokens", max_tokens)
             extensions.setdefault("temperature", 0)
             metadata["request_extensions"] = extensions
-            return await super().generate(
+            resp = await super().generate(
                 shared=shared,
                 job=job,
                 messages=messages,
@@ -530,9 +609,22 @@ async def run_batchcode(tasks: list[ReviewTask], backend_url: str, model: str, m
                 metadata=metadata,
                 timeout=timeout,
             )
+            # Accumulate token usage from the raw API response
+            if isinstance(resp.raw, dict):
+                usage = resp.raw.get("usage") or {}
+                cached = (
+                    usage.get("cached_tokens")
+                    or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                    or 0
+                )
+                async with self._lock:
+                    self._total_prompt_tokens += usage.get("prompt_tokens", 0)
+                    self._total_cached_tokens += cached
+                    self._total_completion_tokens += usage.get("completion_tokens", 0)
+            return resp
 
     os.environ["BATCHCODE_MODEL"] = model
-    backend = LimitedSGLangBackend.from_url(backend_url)
+    backend = TokenTrackingSGLangBackend.from_url(backend_url)
     semaphore = asyncio.Semaphore(max_inflight)
     started = time.monotonic()
 
@@ -541,32 +633,120 @@ async def run_batchcode(tasks: list[ReviewTask], backend_url: str, model: str, m
             return await run_batchcode_task(task, backend, model, working_root)
 
     results = await asyncio.gather(*[one(task) for task in tasks])
-    return results, time.monotonic() - started
+    return list(results), time.monotonic() - started, backend.usage_totals
 
 
-def aggregate(name: str, results: list[TaskResult], wall_clock_seconds: float) -> dict[str, Any]:
+def aggregate(name: str, results: list[TaskResult], wall_clock_seconds: float, extra_usage: dict[str, int] | None = None) -> dict[str, Any]:
     expected = sum(result.expected_bug_count for result in results)
     found = sum(result.found_bug_count for result in results)
     ok = sum(1 for result in results if result.ok)
     successful = sum(1 for result in results if result.success)
+
+    # Token totals: use per-task fields when populated (sequential path),
+    # fall back to extra_usage from backend accumulator (BatchAgent path).
+    per_task_prompt = sum(result.prompt_tokens for result in results)
+    per_task_cached = sum(result.cached_tokens for result in results)
+    per_task_completion = sum(result.completion_tokens for result in results)
+    if extra_usage and per_task_prompt == 0:
+        total_prompt = extra_usage.get("prompt_tokens", 0)
+        total_cached = extra_usage.get("cached_tokens", 0)
+        total_completion = extra_usage.get("completion_tokens", 0)
+    else:
+        total_prompt = per_task_prompt
+        total_cached = per_task_cached
+        total_completion = per_task_completion
+    actual_prefill = total_prompt - total_cached
+
+    n = max(1, len(results))
     return {
         "name": name,
         "ok": ok,
         "failed": len(results) - ok,
         "tasks": len(results),
         "wall_clock_seconds": wall_clock_seconds,
-        "success_rate": successful / max(1, len(results)),
+        "success_rate": successful / n,
         "bug_recall": found / max(1, expected),
         "expected_bugs": expected,
         "found_bugs": found,
         "tool_calls": sum(result.tool_calls for result in results),
-        "quality_avg": sum(result.output_quality for result in results) / max(1, len(results)),
+        "quality_avg": sum(result.output_quality for result in results) / n,
         "per_task_wall_clock_seconds": [result.wall_clock_seconds for result in results],
+        # Token tracking
+        "total_prompt_tokens": total_prompt,
+        "total_cached_tokens": total_cached,
+        "total_completion_tokens": total_completion,
+        "actual_prefill_tokens": actual_prefill,
+        "per_agent_prompt_tokens": total_prompt / n,
+        "per_agent_actual_prefill": actual_prefill / n,
     }
 
 
 def result_rows(results: list[TaskResult]) -> list[dict[str, Any]]:
     return [asdict(result) for result in results]
+
+
+def output_equivalence_audit(
+    reference_name: str,
+    reference_results: list[TaskResult],
+    candidate_name: str,
+    candidate_results: list[TaskResult],
+) -> dict[str, Any]:
+    """Compare final outputs for task-level equivalence.
+
+    Exact text equality is too strict for LLM generations. For the code-review
+    benchmark, the operational equivalence criterion is the set of expected bug
+    IDs found for each task. We still record exact/normalized output hash match
+    rates so claims can distinguish task-equivalent from byte-identical output.
+    """
+
+    reference_by_id = {result.task_id: result for result in reference_results}
+    candidate_by_id = {result.task_id: result for result in candidate_results}
+    task_ids = sorted(set(reference_by_id) & set(candidate_by_id))
+    rows: list[dict[str, Any]] = []
+
+    for task_id in task_ids:
+        ref = reference_by_id[task_id]
+        cand = candidate_by_id[task_id]
+        ref_ids = sorted(ref.found_bug_ids)
+        cand_ids = sorted(cand.found_bug_ids)
+        rows.append(
+            {
+                "task_id": task_id,
+                "prompt_hash_match": bool(ref.prompt_sha256 and ref.prompt_sha256 == cand.prompt_sha256),
+                "finding_set_match": ref_ids == cand_ids,
+                "success_match": ref.success == cand.success,
+                "exact_output_match": bool(ref.output_sha256 and ref.output_sha256 == cand.output_sha256),
+                "normalized_output_match": bool(
+                    ref.normalized_output_sha256
+                    and ref.normalized_output_sha256 == cand.normalized_output_sha256
+                ),
+                "reference_found_bug_ids": ref_ids,
+                "candidate_found_bug_ids": cand_ids,
+                "reference_quality": ref.output_quality,
+                "candidate_quality": cand.output_quality,
+            }
+        )
+
+    tasks_compared = len(rows)
+
+    def rate(key: str) -> float:
+        return sum(1 for row in rows if row[key]) / max(1, tasks_compared)
+
+    return {
+        "reference": reference_name,
+        "candidate": candidate_name,
+        "tasks_compared": tasks_compared,
+        "reference_only_task_ids": sorted(set(reference_by_id) - set(candidate_by_id)),
+        "candidate_only_task_ids": sorted(set(candidate_by_id) - set(reference_by_id)),
+        "prompt_hash_match_rate": rate("prompt_hash_match"),
+        "finding_set_match_rate": rate("finding_set_match"),
+        "success_match_rate": rate("success_match"),
+        "exact_output_match_rate": rate("exact_output_match"),
+        "normalized_output_match_rate": rate("normalized_output_match"),
+        "task_equivalent": tasks_compared > 0 and rate("finding_set_match") == 1.0,
+        "byte_identical": tasks_compared > 0 and rate("exact_output_match") == 1.0,
+        "rows": rows,
+    }
 
 
 async def main() -> None:
@@ -638,7 +818,7 @@ async def main() -> None:
         }
 
     if args.mode in {"both", "batchcode", "sglang-vs-batchcode"}:
-        batch_results, batch_wall = await run_batchcode(
+        batch_results, batch_wall, batch_usage = await run_batchcode(
             tasks,
             args.backend,
             args.model,
@@ -647,13 +827,21 @@ async def main() -> None:
             args.max_tokens,
         )
         payload["batchcode_parallel"] = {
-            "summary": aggregate("batchcode_parallel", batch_results, batch_wall),
+            "summary": aggregate("batchcode_parallel", batch_results, batch_wall, extra_usage=batch_usage),
             "results": result_rows(batch_results),
         }
 
     if "openai_sequential" in payload and "batchcode_parallel" in payload:
         openai_wall = payload["openai_sequential"]["summary"]["wall_clock_seconds"]
         batch_wall = payload["batchcode_parallel"]["summary"]["wall_clock_seconds"]
+        output_audit = output_equivalence_audit(
+            "openai_sequential",
+            openai_results,
+            "batchcode_parallel",
+            batch_results,
+        )
+        seq_prefill = payload["openai_sequential"]["summary"]["actual_prefill_tokens"]
+        batch_prefill = payload["batchcode_parallel"]["summary"]["actual_prefill_tokens"]
         payload["comparison"] = {
             "speedup_openai_over_batchcode": openai_wall / batch_wall if batch_wall else None,
             "wall_clock_seconds_saved": openai_wall - batch_wall,
@@ -665,11 +853,28 @@ async def main() -> None:
                 payload["batchcode_parallel"]["summary"]["bug_recall"]
                 - payload["openai_sequential"]["summary"]["bug_recall"]
             ),
+            "prefill_tokens_sequential": seq_prefill,
+            "prefill_tokens_batchagent": batch_prefill,
+            "prefill_reduction_pct": (
+                round(100 * (seq_prefill - batch_prefill) / seq_prefill, 1)
+                if seq_prefill else None
+            ),
+            "output_equivalence": output_audit,
         }
 
     if "sglang_sequential" in payload and "batchcode_parallel" in payload:
         sglang_wall = payload["sglang_sequential"]["summary"]["wall_clock_seconds"]
         batch_wall = payload["batchcode_parallel"]["summary"]["wall_clock_seconds"]
+        output_audit = output_equivalence_audit(
+            "sglang_sequential",
+            sglang_results,
+            "batchcode_parallel",
+            batch_results,
+        )
+        seq_prefill = payload["sglang_sequential"]["summary"]["actual_prefill_tokens"]
+        batch_prefill = payload["batchcode_parallel"]["summary"]["actual_prefill_tokens"]
+        seq_prompt = payload["sglang_sequential"]["summary"]["total_prompt_tokens"]
+        batch_prompt = payload["batchcode_parallel"]["summary"]["total_prompt_tokens"]
         payload["comparison"] = {
             "speedup_sglang_sequential_over_batchcode": sglang_wall / batch_wall if batch_wall else None,
             "wall_clock_seconds_saved": sglang_wall - batch_wall,
@@ -681,6 +886,15 @@ async def main() -> None:
                 payload["batchcode_parallel"]["summary"]["bug_recall"]
                 - payload["sglang_sequential"]["summary"]["bug_recall"]
             ),
+            "prefill_tokens_sequential": seq_prefill,
+            "prefill_tokens_batchagent": batch_prefill,
+            "prefill_reduction_pct": (
+                round(100 * (seq_prefill - batch_prefill) / seq_prefill, 1)
+                if seq_prefill else None
+            ),
+            "total_prompt_tokens_sequential": seq_prompt,
+            "total_prompt_tokens_batchagent": batch_prompt,
+            "output_equivalence": output_audit,
         }
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

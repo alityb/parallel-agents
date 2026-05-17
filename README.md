@@ -22,26 +22,31 @@ list in, structured result list out.
 
 ## Results
 
-### OpenCode sessions on shared SGLang
+### Shared prefix caching: TTFT vs batch size
 
-Hardware: H100, `Qwen/Qwen2.5-32B-Instruct`, real OpenCode CLI sessions
-(`opencode run` subprocesses).
+Hardware: A10G 23GB, `Qwen/Qwen2.5-7B-Instruct`, vLLM 0.6.6.  
+Workload: N parallel code-review requests, each with the same 2048-token system
+prompt plus a unique ~500-token per-task prompt. All N sent simultaneously.
 
-Condition A is isolated execution with a cache flush between sessions. Condition
-C is parallel execution against one shared SGLang server with the shared prefix
-warmed once.
+TTFT is measured per-request: time from when the HTTP request is sent to when
+the first content token arrives via SSE stream. Without prefix caching, the
+prefill queue backs up — request #50 waits for 49 full 2547-token prefills
+before its own starts (~0.60s × 49 ≈ 29s). With prefix caching, the 2047-token
+system prompt is reused from GPU; each request only prefills ~500 unique tokens
+(~0.005s per rank of additional wait).
 
-| N | Isolated wall-clock | Shared SGLang wall-clock | Speedup | Prefill tokens isolated | Prefill tokens shared | Reduction |
+| N | TTFT P50 (no cache) | TTFT P50 (cache) | Speedup | Wall (no cache) | Wall (cache) | Cache hit |
 |---:|---:|---:|---:|---:|---:|---:|
-| 5 | 28.77s | 10.14s | 2.84x | 63,903 | 1,981 | 97% |
-| 10 | 53.56s | 19.86s | 2.70x | 128,182 | 4,920 | 96% |
-| 20 | 115.39s | 36.32s | 3.18x | 257,094 | 9,874 | 96% |
-| 50 | 286.72s | 98.00s | 2.93x | 643,918 | 23,605 | 96% |
-| 100 | 573.21s | 190.80s | 3.00x | 1,287,681 | 50,806 | 96% |
+| 5 | 1.192s | 0.184s | 6.5x | 4.48s | 2.08s | 81% |
+| 10 | 2.771s | 0.220s | 12.6x | 9.89s | 4.67s | 92% |
+| 20 | 5.453s | 0.216s | 25.2x | 15.41s | 4.70s | 97% |
+| 50 | 13.550s | 0.533s | 25.4x | 33.25s | 5.61s | 99% |
+| 100 | 28.687s | 0.451s | **63.6x** | 63.75s | 6.55s | 99% |
 
-The prefill column is the core result. At N=100, isolated inference computes
-1.28M prefill tokens. Shared SGLang computes 50K. Same output, 96% less prefill
-compute.
+Source: `tests/benchmarks/results/prefix_cache_benchmark/results.json`.
+Per-request TTFT distributions stored in `ttft_all_sorted` in each condition's
+result file. The no-cache distribution is linear (rank × 0.60s); the cache
+distribution is near-flat (rank × 0.005s).
 
 ### Real multi-turn research task
 

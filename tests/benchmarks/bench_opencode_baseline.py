@@ -607,8 +607,6 @@ async def run_batchcode_task(task: ReviewTask, backend: Any, model: str, working
             **fingerprints,
         )
     except Exception as error:
-        import traceback as _tb
-        _tb.print_exc()
         wall = time.monotonic() - started
         fingerprints = result_fingerprints(prompt, "")
         return TaskResult(

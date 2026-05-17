@@ -279,7 +279,8 @@ async def run_openai_task(task: ReviewTask, base_url: str, api_key: str, model: 
             response.raise_for_status()
         wall = time.monotonic() - started
         payload = response.json()
-        message = payload.get("choices", [{}])[0].get("message", {})
+        choice = (payload.get("choices") or [{}])[0] or {}
+        message = choice.get("message") or {}
         text = message.get("content") or json.dumps(payload)
         found, quality = score_output(text, task.bugs)
         fingerprints = result_fingerprints(prompt, text)
@@ -356,15 +357,15 @@ async def run_sglang_task(task: ReviewTask, base_url: str, model: str, timeout: 
             response.raise_for_status()
         wall = time.monotonic() - started
         payload = response.json()
-        message = payload.get("choices", [{}])[0].get("message", {})
+        choice = (payload.get("choices") or [{}])[0] or {}
+        message = choice.get("message") or {}
         text = message.get("content") or json.dumps(payload)
         found, quality = score_output(text, task.bugs)
         fingerprints = result_fingerprints(prompt, text)
         usage = payload.get("usage") or {}
-        # SGLang may report cached tokens under different keys
         cached = (
             usage.get("cached_tokens")
-            or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+            or (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
             or 0
         )
         return TaskResult(
@@ -574,7 +575,13 @@ async def run_batchcode_task(task: ReviewTask, backend: Any, model: str, working
     try:
         from batch_agent.spec import AgentJob, SharedContext, Message
         shared = SharedContext(prefix="", strip_preamble=False)
-        job = AgentJob(job_id=task.task_id, prompt=prompt, index=0)
+        job = AgentJob(
+            job_id=task.task_id,
+            index=0,
+            input_data={},
+            prompt=prompt,
+            estimated_prompt_tokens=len(prompt) // 4,
+        )
         resp = await backend.generate(
             shared=shared,
             job=job,
